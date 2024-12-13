@@ -82,7 +82,9 @@ class MedicationsScreen extends StatelessWidget {
 
           final medications = snapshot.data ?? [];
           debugPrint('StreamBuilder received ${medications.length} medications');
-          medications.forEach((med) => debugPrint('Medication in view: ${med.name} (${med.id})'));
+          for (var med in medications) {
+            debugPrint('Medication in view: ${med.name} (${med.id})');
+          }
 
           if (medications.isEmpty) {
             return Center(

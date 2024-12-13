@@ -76,7 +76,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _medications;
   String? _chronicConditions;
   String? _primaryPhysician;
-  String? _emergencyContact;
 
   @override
   void initState() {
@@ -164,7 +163,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _medications = data['medications']?.toString();
           _chronicConditions = data['chronicConditions']?.toString();
           _primaryPhysician = data['primaryPhysician']?.toString();
-          _emergencyContact = data['emergencyContact']?.toString();
           
           _isLoading = false;
         });
@@ -224,7 +222,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'medications': _medications?.trim(),
         'chronicConditions': _chronicConditions?.trim(),
         'primaryPhysician': _primaryPhysician?.trim(),
-        'emergencyContact': _emergencyContact?.trim(),
         'lastUpdated': FieldValue.serverTimestamp(),
       };
 
@@ -327,249 +324,241 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Personal Information',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _nameController,
-                      enabled: _isEditing,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name',
-                        border: OutlineInputBorder(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Personal Information',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      enabled: _isEditing,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      enabled: _isEditing,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<Gender>(
-                      value: _gender,
-                      decoration: const InputDecoration(
-                        labelText: 'Gender',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: Gender.values.map((gender) {
-                        return DropdownMenuItem(
-                          value: gender,
-                          child: Text(gender.display),
-                        );
-                      }).toList(),
-                      onChanged: _isEditing
-                          ? (value) {
-                              if (value != null) {
-                                setState(() => _gender = value);
-                              }
-                            }
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    InkWell(
-                      onTap: _isEditing ? _selectDate : null,
-                      child: InputDecorator(
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _nameController,
+                        enabled: _isEditing,
                         decoration: const InputDecoration(
-                          labelText: 'Date of Birth',
+                          labelText: 'Full Name',
                           border: OutlineInputBorder(),
                         ),
-                        child: Text(
-                          _dateOfBirth != null
-                              ? DateFormat('MMM d, y').format(_dateOfBirth!)
-                              : 'Not set',
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        enabled: _isEditing,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _phoneController,
+                        enabled: _isEditing,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone Number',
+                          border: OutlineInputBorder(),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Medical Information',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<BloodType>(
-                      value: _bloodType,
-                      decoration: const InputDecoration(
-                        labelText: 'Blood Type',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: BloodType.values.map((type) {
-                        return DropdownMenuItem(
-                          value: type,
-                          child: Text(type.display),
-                        );
-                      }).toList(),
-                      onChanged: _isEditing
-                          ? (value) {
-                              if (value != null) {
-                                setState(() => _bloodType = value);
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<Gender>(
+                        value: _gender,
+                        decoration: const InputDecoration(
+                          labelText: 'Gender',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: Gender.values.map((gender) {
+                          return DropdownMenuItem(
+                            value: gender,
+                            child: Text(gender.display),
+                          );
+                        }).toList(),
+                        onChanged: _isEditing
+                            ? (value) {
+                                if (value != null) {
+                                  setState(() => _gender = value);
+                                }
                               }
-                            }
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _heightController,
-                      enabled: _isEditing,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Height (m)',
-                        border: OutlineInputBorder(),
+                            : null,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your height';
-                        }
-                        final height = double.tryParse(value);
-                        if (height == null || height < 0.5 || height > 2.5) {
-                          return 'Please enter a valid height (0.5-2.5 m)';
-                        }
-                        return null;
-                      },
-                    ),
-                    if (!_isEditing) ...[
-                      const SizedBox(height: 8),
-                      _buildHeightConversions(),
+                      const SizedBox(height: 16),
+                      InkWell(
+                        onTap: _isEditing ? _selectDate : null,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Date of Birth',
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text(
+                            _dateOfBirth != null
+                                ? DateFormat('MMM d, y').format(_dateOfBirth!)
+                                : 'Not set',
+                          ),
+                        ),
+                      ),
                     ],
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _allergies,
-                      enabled: _isEditing,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Allergies',
-                        hintText: 'List any allergies',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => _allergies = value,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _medications,
-                      enabled: _isEditing,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Current Medications',
-                        hintText: 'List any medications you are currently taking',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => _medications = value,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _chronicConditions,
-                      enabled: _isEditing,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Chronic Conditions',
-                        hintText: 'List any chronic conditions or ongoing health issues',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => _chronicConditions = value,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _primaryPhysician,
-                      enabled: _isEditing,
-                      decoration: const InputDecoration(
-                        labelText: 'Primary Physician',
-                        hintText: 'Name and contact information',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => _primaryPhysician = value,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Contact Information',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _addressController,
-                      enabled: _isEditing,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Address',
-                        border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Medical Information',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _emergencyContact,
-                      enabled: _isEditing,
-                      decoration: const InputDecoration(
-                        labelText: 'Emergency Contact',
-                        hintText: 'Name and phone number',
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<BloodType>(
+                        value: _bloodType,
+                        decoration: const InputDecoration(
+                          labelText: 'Blood Type',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: BloodType.values.map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(type.display),
+                          );
+                        }).toList(),
+                        onChanged: _isEditing
+                            ? (value) {
+                                if (value != null) {
+                                  setState(() => _bloodType = value);
+                                }
+                              }
+                            : null,
                       ),
-                      onChanged: (value) => _emergencyContact = value,
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _heightController,
+                        enabled: _isEditing,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Height (m)',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your height';
+                          }
+                          final height = double.tryParse(value);
+                          if (height == null || height < 0.5 || height > 2.5) {
+                            return 'Please enter a valid height (0.5-2.5 m)';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (!_isEditing) ...[
+                        const SizedBox(height: 8),
+                        _buildHeightConversions(),
+                      ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _allergies,
+                        enabled: _isEditing,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Allergies',
+                          hintText: 'List any allergies',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => _allergies = value,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _medications,
+                        enabled: _isEditing,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Current Medications',
+                          hintText: 'List any medications you are currently taking',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => _medications = value,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _chronicConditions,
+                        enabled: _isEditing,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Chronic Conditions',
+                          hintText: 'List any chronic conditions or ongoing health issues',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => _chronicConditions = value,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _primaryPhysician,
+                        enabled: _isEditing,
+                        decoration: const InputDecoration(
+                          labelText: 'Primary Physician',
+                          hintText: 'Name and contact information',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => _primaryPhysician = value,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Contact Information',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _addressController,
+                        enabled: _isEditing,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Address',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

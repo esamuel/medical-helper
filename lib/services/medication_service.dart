@@ -69,11 +69,6 @@ class MedicationService {
               debugPrint('Processing document ID: ${doc.id}');
               final data = doc.data();
               debugPrint('Document data: $data');
-              
-              if (data == null) {
-                debugPrint('Document data is null for ID: ${doc.id}');
-                return null;
-              }
 
               try {
                 final medication = MedicationModel.fromMap(data, doc.id);
@@ -91,7 +86,9 @@ class MedicationService {
             
             medications.sort((a, b) => b.startDate.compareTo(a.startDate));
             debugPrint('Returning ${medications.length} sorted medications');
-            medications.forEach((med) => debugPrint('Medication in list: ${med.name} (${med.id})'));
+            for (var med in medications) {
+              debugPrint('Medication in list: ${med.name} (${med.id})');
+            }
             return medications;
           } catch (e, stackTrace) {
             debugPrint('Error processing medications stream: $e');
