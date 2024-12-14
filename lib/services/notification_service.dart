@@ -1,150 +1,211 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import '../models/medication_model.dart';
-import 'package:flutter/foundation.dart';
 
 class NotificationService {
-  static final NotificationService _instance = NotificationService._();
-  factory NotificationService() => _instance;
-
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
-  bool _isInitialized = false;
 
-  NotificationService._();
+  NotificationService() {
+    initializeService();
+  }
 
-  Future<void> initialize() async {
-    if (_isInitialized) return;
+  Future<void> initializeService() async {
+    await _initializeTimeZone();
+    await _initializeNotifications();
+  }
 
-    debugPrint('Initializing NotificationService');
+  Future<void> _initializeTimeZone() async {
     tz.initializeTimeZones();
+  }
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  Future<void> _initializeNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-
-    await _notifications.initialize(
-      const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
+    
+    const initializationSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
     );
 
-    _isInitialized = true;
-    debugPrint('NotificationService initialized successfully');
+    await _notifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        // Handle notification tap
+        print('Notification tapped: ${response.payload}');
+      },
+    );
   }
 
   Future<void> requestPermissions() async {
-    await initialize();
-    await _notifications.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>()?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
+    if (_notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>() != null) {
+      await _notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    }
+  }
+
+  // Schedule a medication reminder
+  Future<void> scheduleMedicationReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medication_channel',
+          'Medication Reminders',
+          channelDescription: 'Notifications for medication reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/launcher_icon',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
     );
   }
 
-  Future<void> scheduleMedicationReminders(MedicationModel medication) async {
-    await initialize();
-    debugPrint('Scheduling reminders for medication: ${medication.id}');
-
-    try {
-      // Cancel existing reminders for this medication
-      await cancelMedicationReminders(medication.id);
-
-      if (medication.frequency == MedicationFrequency.asNeeded) {
-        debugPrint('Medication is as-needed, skipping reminder scheduling');
-        return;
-      }
-
-      final now = DateTime.now();
-
-      for (final time in medication.takingTimes) {
-        var scheduledDate = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          time.hour,
-          time.minute,
-        );
-
-        // If the time has passed for today, schedule for tomorrow
-        if (scheduledDate.isBefore(now)) {
-          scheduledDate = scheduledDate.add(const Duration(days: 1));
-        }
-
-        // Create unique ID for each reminder time
-        final notificationId = '${medication.id}_${time.hour}_${time.minute}'.hashCode;
-
-        debugPrint('Scheduling notification for ${medication.name} at $scheduledDate');
-
-        const notificationDetails = NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medication_reminders',
-            'Medication Reminders',
-            channelDescription: 'Reminders to take medications',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        );
-
-        // Schedule the notification
-        await _notifications.zonedSchedule(
-          notificationId,
-          'Time to take ${medication.name}',
-          'Take ${medication.dosage} ${medication.instructions.isNotEmpty ? '- ${medication.instructions}' : ''}',
-          tz.TZDateTime.from(scheduledDate, tz.local),
-          notificationDetails,
-          androidAllowWhileIdle: true,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.time,
-        );
-
-        debugPrint('Successfully scheduled notification for ${medication.name} at $scheduledDate');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error scheduling medication reminders: $e');
-      debugPrint('Stack trace: $stackTrace');
-      // Don't rethrow - we don't want notification failures to prevent medication saving
-    }
+  // Schedule a health tracking reminder
+  Future<void> scheduleHealthTrackingReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'health_channel',
+          'Health Tracking',
+          channelDescription: 'Notifications for health tracking reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/launcher_icon',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
   }
 
+  // Schedule an appointment reminder
+  Future<void> scheduleAppointmentReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'appointment_channel',
+          'Appointments',
+          channelDescription: 'Notifications for medical appointments',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/launcher_icon',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // Send an emergency update notification
+  Future<void> showEmergencyNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await _notifications.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'emergency_channel',
+          'Emergency Updates',
+          channelDescription: 'Notifications for emergency updates',
+          importance: Importance.max,
+          priority: Priority.max,
+          icon: '@mipmap/launcher_icon',
+          color: Colors.red,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
+
+  // Cancel a specific notification
+  Future<void> cancelNotification(int id) async {
+    await _notifications.cancel(id);
+  }
+
+  // Cancel all notifications
+  Future<void> cancelAllNotifications() async {
+    await _notifications.cancelAll();
+  }
+
+  // Cancel medication reminders
   Future<void> cancelMedicationReminders(String medicationId) async {
-    await initialize();
-    debugPrint('Canceling reminders for medication: $medicationId');
-
-    try {
-      final notifications = await _notifications.pendingNotificationRequests();
-      for (var notification in notifications) {
-        if (notification.id.toString().startsWith(medicationId.hashCode.toString())) {
-          await _notifications.cancel(notification.id);
-          debugPrint('Canceled notification with ID: ${notification.id}');
-        }
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error canceling medication reminders: $e');
-      debugPrint('Stack trace: $stackTrace');
-      // Don't rethrow - we don't want notification failures to prevent medication saving
-    }
+    // Convert medicationId to a unique notification ID
+    final notificationId = medicationId.hashCode;
+    await cancelNotification(notificationId);
   }
 
-  Future<void> cancelAllReminders() async {
-    await initialize();
-    try {
-      await _notifications.cancelAll();
-      debugPrint('Canceled all notifications');
-    } catch (e, stackTrace) {
-      debugPrint('Error canceling all reminders: $e');
-      debugPrint('Stack trace: $stackTrace');
-    }
+  // Schedule medication reminders
+  Future<void> scheduleMedicationReminders(medication) async {
+    // Convert medicationId to a unique notification ID
+    final notificationId = medication.id.hashCode;
+    
+    await scheduleMedicationReminder(
+      id: notificationId,
+      title: 'Time to take ${medication.name}',
+      body: 'Take ${medication.dosage} ${medication.instructions}',
+      scheduledDate: DateTime.now().add(const Duration(minutes: 1)), // Example time
+    );
   }
 } 

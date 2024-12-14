@@ -200,7 +200,7 @@ class BloodSugarReading {
 
   factory BloodSugarReading.fromMap(Map<String, dynamic> map) {
     return BloodSugarReading(
-      value: (map['value'] ?? 0.0).toDouble(),
+      value: (map['value'] as num).toDouble(),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       mealTime: MealTime.values[map['mealTime'] ?? 0],
       notes: map['notes'] ?? '',
@@ -280,8 +280,8 @@ class WeightReading {
 
   factory WeightReading.fromMap(Map<String, dynamic> map) {
     return WeightReading(
-      weight: (map['weight'] ?? 0.0).toDouble(),
-      height: (map['height'] ?? 0.0).toDouble(),
+      weight: (map['weight'] as num).toDouble(),
+      height: (map['height'] as num).toDouble(),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       notes: map['notes'] ?? '',
     );
@@ -458,7 +458,7 @@ class HealthMetric {
       );
     } else if (type == 'Heart Rate') {
       value = HeartRateReading(
-        value: map['value'] as int,
+        value: (map['value'] as num).toInt(),
         timestamp: timestamp,
         activity: map['activity'] != null 
           ? ActivityType.values[map['activity'] as int]
@@ -620,11 +620,12 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
       debugPrint('Found ${snapshot.docs.length} health metrics');
 
+      // Process all documents first
+      final List<HealthMetric> allMetrics = [];
+      
       for (var doc in snapshot.docs) {
         try {
           debugPrint('Processing document: ${doc.id}');
-          debugPrint('Document data: ${doc.data()}');
-
           final map = doc.data();
           final type = map['type'] as String;
           dynamic value;
@@ -679,32 +680,37 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             value = map['value'];
           }
 
-          if (mounted) {
-            setState(() {
-              _healthData[type]?.add(
-                HealthMetric(
-                  id: doc.id,
-                  userId: map['userId'] as String,
-                  timestamp: timestamp,
-                  value: value,
-                  unit: map['unit'] as String,
-                  type: type,
-                  notes: map['notes'] as String? ?? '',
-                ),
-              );
-            });
-          }
+          allMetrics.add(
+            HealthMetric(
+              id: doc.id,
+              userId: map['userId'] as String,
+              timestamp: timestamp,
+              value: value,
+              unit: map['unit'] as String,
+              type: type,
+              notes: map['notes'] as String? ?? '',
+            ),
+          );
 
-          debugPrint('Added metric to category: $type with value: $value at $timestamp');
         } catch (e, stackTrace) {
           debugPrint('Error processing document ${doc.id}: $e');
           debugPrint('Stack trace: $stackTrace');
         }
       }
 
-      setState(() {
-        _isLoading = false;
-      });
+      // Sort metrics by timestamp (newest first)
+      allMetrics.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      // Group sorted metrics by type
+      if (mounted) {
+        setState(() {
+          for (var metric in allMetrics) {
+            _healthData[metric.type]?.add(metric);
+          }
+          _isLoading = false;
+        });
+      }
+
     } catch (e, stackTrace) {
       debugPrint('Error loading health data: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -740,12 +746,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         return;
       }
 
-      debugPrint('Creating new health metric...');
-      debugPrint('Type: $type');
-      debugPrint('Unit: $unit');
-      debugPrint('Value: $value');
-      debugPrint('Notes: $notes');
-      
       final timestamp = DateTime.now();
       final docId = '${userId}_${timestamp.millisecondsSinceEpoch}';
 
@@ -760,21 +760,17 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       );
 
       final Map<String, dynamic> data = metric.toMap();
-      debugPrint('Saving health metric to Firestore...');
-      debugPrint('Document ID: $docId');
-      debugPrint('Document data: $data');
-
       await _firestore
           .collection('health_metrics')
           .doc(docId)
           .set(data);
 
-      debugPrint('Successfully saved to Firestore');
-
       if (!mounted) return;
 
       setState(() {
-        _healthData[type]?.insert(0, metric);
+        final metrics = _healthData[type] ?? [];
+        metrics.add(metric);
+        metrics.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -836,12 +832,15 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         builder: (context, setState) => AlertDialog(
           title: const Text('Add Heart Rate Reading'),
           content: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: _heartRateController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Heart Rate (BPM)',
                     hintText: 'Enter heart rate in beats per minute',
@@ -1003,12 +1002,15 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Add Blood Pressure Reading'),
         content: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _systolicController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Systolic (mmHg)',
                   hintText: 'Enter systolic pressure',
@@ -1018,7 +1020,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _diastolicController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Diastolic (mmHg)',
                   hintText: 'Enter diastolic pressure',
@@ -1028,7 +1030,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _pulseController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Pulse (bpm)',
                   hintText: 'Enter pulse rate',
@@ -1130,12 +1132,15 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Add Blood Sugar Reading'),
         content: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _valueController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Blood Sugar (mg/dL)',
                   hintText: 'Enter blood sugar level',
@@ -1252,12 +1257,15 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Add Weight Reading'),
         content: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _valueController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Weight (kg)',
                   hintText: 'Enter your weight',
@@ -1267,7 +1275,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _heightController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Height (m)',
                   hintText: 'Enter your height',
@@ -1385,6 +1393,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           ),
         ),
         body: TabBarView(
+          physics: const BouncingScrollPhysics(),
           children: _healthData.entries.map((entry) {
             final metrics = entry.value;
             return metrics.isEmpty
@@ -1410,60 +1419,65 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                       ],
                     ),
                   )
-                : Column(
-                    children: [
-                      if (entry.key == 'Blood Pressure') 
-                        _buildBloodPressureGraph()
-                      else if (entry.key == 'Blood Sugar')
-                        _buildBloodSugarGraph()
-                      else if (entry.key == 'Weight')
-                        _buildWeightGraph()
-                      else if (entry.key == 'Heart Rate')
-                        _buildHeartRateGraph(),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: metrics.length,
-                          itemBuilder: (context, index) {
-                            final metric = metrics[index];
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: ListTile(
-                                title: metric.type == 'Blood Pressure'
-                                    ? _buildBloodPressureTitle(metric.value as BloodPressureReading)
-                                    : metric.type == 'Blood Sugar'
-                                        ? _buildBloodSugarTitle(metric.value as BloodSugarReading)
-                                        : metric.type == 'Weight'
-                                            ? _buildWeightTitle(metric.value as WeightReading)
-                                            : metric.type == 'Heart Rate'
-                                                ? _buildHeartRateTitle(metric.value as HeartRateReading)
-                                                : Text(
-                                                    '${metric.value} ${metric.unit}',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        if (entry.key == 'Blood Pressure') 
+                          _buildBloodPressureGraph()
+                        else if (entry.key == 'Blood Sugar')
+                          _buildBloodSugarGraph()
+                        else if (entry.key == 'Weight')
+                          _buildWeightGraph()
+                        else if (entry.key == 'Heart Rate')
+                          _buildHeartRateGraph(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.only(top: 16, bottom: 80),
+                            itemCount: metrics.length,
+                            itemBuilder: (context, index) {
+                              final metric = metrics[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                child: ListTile(
+                                  title: metric.type == 'Blood Pressure'
+                                      ? _buildBloodPressureTitle(metric.value as BloodPressureReading)
+                                      : metric.type == 'Blood Sugar'
+                                          ? _buildBloodSugarTitle(metric.value as BloodSugarReading)
+                                          : metric.type == 'Weight'
+                                              ? _buildWeightTitle(metric.value as WeightReading)
+                                              : metric.type == 'Heart Rate'
+                                                  ? _buildHeartRateTitle(metric.value as HeartRateReading)
+                                                  : Text(
+                                                      '${metric.value} ${metric.unit}',
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
                                                     ),
-                                                  ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      DateFormat('MMM d, y - h:mm a')
-                                          .format(metric.timestamp),
-                                    ),
-                                    if (metric.notes.isNotEmpty)
-                                      Text('Notes: ${metric.notes}'),
-                                  ],
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        DateFormat('MMM d, y - h:mm a')
+                                            .format(metric.timestamp),
+                                      ),
+                                      if (metric.notes.isNotEmpty)
+                                        Text('Notes: ${metric.notes}'),
+                                    ],
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete),
+                                    onPressed: () => _deleteHealthMetric(metric.id, index),
+                                  ),
                                 ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete),
-                                  onPressed: () => _deleteHealthMetric(metric.id, index),
-                                ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
           }).toList(),
         ),
@@ -1524,9 +1538,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     final readings = _healthData['Blood Pressure']!
         .map((metric) => metric.value as BloodPressureReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
+        .toList(); // Show newest to oldest
 
     if (readings.isEmpty) {
       return const SizedBox.shrink();
@@ -1678,9 +1690,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     final readings = _healthData['Blood Sugar']!
         .map((metric) => metric.value as BloodSugarReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
+        .toList(); // Show newest to oldest
 
     if (readings.isEmpty) {
       return const SizedBox.shrink();
@@ -1840,9 +1850,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     final readings = _healthData['Weight']!
         .map((metric) => metric.value as WeightReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
+        .toList(); // Show newest to oldest
 
     if (readings.isEmpty) {
       return const SizedBox.shrink();
@@ -2036,9 +2044,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     final readings = _healthData['Heart Rate']!
         .map((metric) => metric.value as HeartRateReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
+        .toList(); // Show newest to oldest
 
     if (readings.isEmpty) {
       return const SizedBox.shrink();

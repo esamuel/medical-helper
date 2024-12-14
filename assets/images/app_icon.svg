@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024px" height="1024px" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Circle background -->
+        <circle fill="#1ABC9C" cx="512" cy="512" r="460"/>
+        
+        <!-- Medical cross -->
+        <path d="M435,307 L589,307 L589,435 L717,435 L717,589 L589,589 L589,717 L435,717 L435,589 L307,589 L307,435 L435,435 Z" 
+              fill="#FFFFFF" 
+              fill-rule="nonzero"/>
+              
+        <!-- Heart shape -->
+        <path d="M512,665 C410,563 359,512 359,435 C359,384 399,358 435,358 C471,358 497,384 512,410 C527,384 553,358 589,358 C625,358 665,384 665,435 C665,512 614,563 512,665 Z" 
+              fill="#FFFFFF" 
+              fill-rule="nonzero"/>
+    </g>
+</svg>

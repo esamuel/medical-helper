@@ -9,9 +9,9 @@ class AddMedicationScreen extends StatefulWidget {
   final MedicationModel? medicationToEdit;
 
   const AddMedicationScreen({
-    Key? key,
+    super.key,
     this.medicationToEdit,
-  }) : super(key: key);
+  });
 
   @override
   State<AddMedicationScreen> createState() => _AddMedicationScreenState();

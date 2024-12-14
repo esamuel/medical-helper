@@ -9,7 +9,7 @@ import '../services/healthcare_appointment_service.dart';
 import 'package:intl/intl.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
-  const EmergencyContactsScreen({Key? key}) : super(key: key);
+  const EmergencyContactsScreen({super.key});
 
   @override
   _EmergencyContactsScreenState createState() => _EmergencyContactsScreenState();

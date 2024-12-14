@@ -6,9 +6,13 @@ import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/settings/settings_screen.dart';
 import 'services/auth_service.dart';
 import 'services/medication_service.dart';
 import 'services/notification_service.dart';
+import 'providers/theme_provider.dart';
+import 'providers/notification_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +22,7 @@ void main() async {
   
   // Initialize notification service
   final notificationService = NotificationService();
-  await notificationService.initialize();
+  await notificationService.initializeService();
   await notificationService.requestPermissions();
   
   runApp(MyApp(notificationService: notificationService));
@@ -49,18 +53,27 @@ class MyApp extends StatelessWidget {
           create: (context) => context.read<AuthService>().authStateChanges,
           initialData: null,
         ),
-      ],
-      child: MaterialApp(
-        title: 'Medical Helper',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
         ),
-        home: const AuthWrapper(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegisterScreen(),
+        ChangeNotifierProvider(
+          create: (_) => NotificationProvider(),
+        ),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Medical Helper',
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.themeData,
+            home: const AuthWrapper(),
+            routes: {
+              '/login': (context) => const LoginScreen(),
+              '/register': (context) => const RegisterScreen(),
+              '/forgot-password': (context) => const ForgotPasswordScreen(),
+              '/settings': (context) => const SettingsScreen(),
+            },
+          );
         },
       ),
     );

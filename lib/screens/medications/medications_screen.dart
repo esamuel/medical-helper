@@ -7,7 +7,7 @@ import 'add_medication_screen.dart';
 import '../../services/notification_service.dart';
 
 class MedicationsScreen extends StatelessWidget {
-  const MedicationsScreen({Key? key}) : super(key: key);
+  const MedicationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -171,167 +171,172 @@ class _HealthcareAppointmentsScreenState
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title:
-            Text(appointment == null ? 'Add Appointment' : 'Edit Appointment'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(appointment == null ? 'Add Appointment' : 'Edit Appointment'),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: titleController,
+                        decoration: const InputDecoration(labelText: 'Title'),
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'Required' : null,
+                      ),
+                      TextFormField(
+                        controller: providerController,
+                        decoration: const InputDecoration(
+                            labelText: 'Doctor/Institution'),
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'Required' : null,
+                      ),
+                      TextFormField(
+                        controller: specialityController,
+                        decoration: const InputDecoration(labelText: 'Speciality'),
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'Required' : null,
+                      ),
+                      TextFormField(
+                        controller: locationController,
+                        decoration: const InputDecoration(labelText: 'Location'),
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        title: const Text('Date & Time'),
+                        subtitle: Text(_dateFormat.format(selectedDate)),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (date != null) {
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(selectedDate),
+                            );
+                            if (time != null) {
+                              setState(() {
+                                selectedDate = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
+                          }
+                        },
+                      ),
+                      SwitchListTile(
+                        title: const Text('Reminder'),
+                        value: hasReminder,
+                        onChanged: (value) => setState(() => hasReminder = value),
+                      ),
+                      if (hasReminder)
+                        DropdownButtonFormField<int>(
+                          value: reminderMinutes,
+                          decoration: const InputDecoration(
+                            labelText: 'Reminder Time',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                                value: 15, child: Text('15 minutes before')),
+                            DropdownMenuItem(
+                                value: 30, child: Text('30 minutes before')),
+                            DropdownMenuItem(
+                                value: 60, child: Text('1 hour before')),
+                            DropdownMenuItem(
+                                value: 120, child: Text('2 hours before')),
+                            DropdownMenuItem(
+                                value: 1440, child: Text('1 day before')),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => reminderMinutes = value ?? 60),
+                        ),
+                      TextFormField(
+                        controller: notesController,
+                        decoration: const InputDecoration(labelText: 'Notes'),
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
                 ),
-                TextFormField(
-                  controller: providerController,
-                  decoration: const InputDecoration(
-                      labelText: 'Doctor/Institution'),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
                 ),
-                TextFormField(
-                  controller: specialityController,
-                  decoration: const InputDecoration(labelText: 'Speciality'),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                TextFormField(
-                  controller: locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  title: const Text('Date & Time'),
-                  subtitle: Text(_dateFormat.format(selectedDate)),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(selectedDate),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (formKey.currentState?.validate() ?? false) {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('You must be logged in to add appointments')),
+                        );
+                        return;
+                      }
+
+                      final newAppointment = HealthcareAppointment(
+                        id: appointment?.id,
+                        title: titleController.text,
+                        provider: providerController.text,
+                        speciality: specialityController.text,
+                        appointmentDate: selectedDate,
+                        location: locationController.text,
+                        notes: notesController.text,
+                        hasReminder: hasReminder,
+                        reminderMinutes: reminderMinutes,
+                        userId: user.uid,
+                        createdAt: appointment?.createdAt ?? DateTime.now(),
                       );
-                      if (time != null) {
-                        selectedDate = DateTime(
-                          date.year,
-                          date.month,
-                          date.day,
-                          time.hour,
-                          time.minute,
+
+                      try {
+                        if (appointment == null) {
+                          await _appointmentService.addAppointment(newAppointment);
+                        } else {
+                          await _appointmentService.updateAppointment(newAppointment);
+                        }
+                        if (mounted) {
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  '${appointment == null ? 'Added' : 'Updated'} appointment successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     }
                   },
-                ),
-                SwitchListTile(
-                  title: const Text('Reminder'),
-                  value: hasReminder,
-                  onChanged: (value) => setState(() => hasReminder = value),
-                ),
-                if (hasReminder)
-                  DropdownButtonFormField<int>(
-                    value: reminderMinutes,
-                    items: [
-                      const DropdownMenuItem(
-                          value: 15, child: Text('15 minutes before')),
-                      const DropdownMenuItem(
-                          value: 30, child: Text('30 minutes before')),
-                      const DropdownMenuItem(
-                          value: 60, child: Text('1 hour before')),
-                      const DropdownMenuItem(
-                          value: 120, child: Text('2 hours before')),
-                      const DropdownMenuItem(
-                          value: 1440, child: Text('1 day before')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => reminderMinutes = value ?? 60),
-                  ),
-                TextFormField(
-                  controller: notesController,
-                  decoration: const InputDecoration(labelText: 'Notes'),
-                  maxLines: 3,
+                  child: Text(appointment == null ? 'Add' : 'Update'),
                 ),
               ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (formKey.currentState?.validate() ?? false) {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('You must be logged in to add appointments')),
-                  );
-                  return;
-                }
-
-                final newAppointment = HealthcareAppointment(
-                  id: appointment?.id,
-                  title: titleController.text,
-                  provider: providerController.text,
-                  speciality: specialityController.text,
-                  appointmentDate: selectedDate,
-                  location: locationController.text,
-                  notes: notesController.text,
-                  hasReminder: hasReminder,
-                  reminderMinutes: reminderMinutes,
-                  userId: user.uid,
-                  createdAt: appointment?.createdAt ?? DateTime.now(),
-                );
-
-                try {
-                  if (appointment == null) {
-                    print('Adding new appointment: ${newAppointment.toMap()}'); 
-                    await _appointmentService.addAppointment(newAppointment);
-                    print('Successfully added appointment'); 
-                  } else {
-                    print('Updating appointment: ${newAppointment.toMap()}'); 
-                    await _appointmentService.updateAppointment(newAppointment);
-                    print('Successfully updated appointment'); 
-                  }
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          appointment == null 
-                              ? 'Appointment added successfully' 
-                              : 'Appointment updated successfully'
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  print('Error saving appointment: $e'); 
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 

@@ -8,18 +8,37 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutBack,
+      ),
+    );
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -61,12 +80,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.medical_services,
-                    size: 100,
-                    color: Colors.blue,
+                  // App Icon with Animation
+                  ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: Container(
+                      height: 150,
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: PhysicalModel(
+                        color: Colors.transparent,
+                        elevation: 8.0,
+                        shadowColor: const Color(0xFF1ABC9C).withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(20),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset(
+                            'assets/images/app_icon.png',
+                            fit: BoxFit.contain,
+                            height: 120,
+                            width: 120,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 32.0),
+                  // App Name with Animation
+                  ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: const Text(
+                      'Medical Helper',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28.0,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1ABC9C), // Matching the icon's teal color
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32.0),
                   Text(
                     'Welcome Back',
                     style: Theme.of(context).textTheme.headlineMedium,
