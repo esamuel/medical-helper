@@ -5,6 +5,7 @@ import 'health/health_data_screen.dart';
 import 'medications/medications_screen.dart';
 import 'profile/profile_screen.dart';
 import 'emergency_contacts_screen.dart';
+import 'health/health_resume_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,6 +37,17 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Medical Helper'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          // Print Button
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HealthResumeScreen()),
+              );
+            },
+            tooltip: 'Print Health Resume',
+          ),
           // Dark Mode Toggle
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {

@@ -19,6 +19,39 @@ class TestNotificationsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Permissions Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Notification Permissions',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      final result = await notificationService.requestPermissions();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Notification permission status: ${result ?? "unknown"}'),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.security),
+                    label: const Text('Request Notification Permission'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Status Card
           Card(
             child: Padding(
@@ -52,14 +85,14 @@ class TestNotificationsScreen extends StatelessWidget {
           // Immediate Notification
           ElevatedButton.icon(
             onPressed: () async {
-              await notificationService.showEmergencyNotification(
+              await notificationService.showNotification(
                 id: 1,
-                title: 'Test Emergency',
-                body: 'This is a test emergency notification',
+                title: 'Test Notification',
+                body: 'This is an immediate test notification',
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Emergency notification sent')),
+                  const SnackBar(content: Text('Immediate notification sent')),
                 );
               }
             },
@@ -72,15 +105,15 @@ class TestNotificationsScreen extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: () async {
               final scheduledTime = DateTime.now().add(const Duration(seconds: 30));
-              await notificationService.scheduleMedicationReminder(
+              await notificationService.scheduleNotification(
                 id: 2,
-                title: 'Test Medication',
-                body: 'This is a test medication reminder (30 seconds delay)',
+                title: 'Delayed Notification',
+                body: 'This notification was scheduled for 30 seconds',
                 scheduledDate: scheduledTime,
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Medication reminder scheduled for 30 seconds')),
+                  const SnackBar(content: Text('Notification scheduled for 30 seconds')),
                 );
               }
             },
@@ -89,45 +122,24 @@ class TestNotificationsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Health Tracking Reminder
+          // 1 Minute Notification
           ElevatedButton.icon(
             onPressed: () async {
               final scheduledTime = DateTime.now().add(const Duration(minutes: 1));
-              await notificationService.scheduleHealthTrackingReminder(
+              await notificationService.scheduleNotification(
                 id: 3,
-                title: 'Test Health Tracking',
-                body: 'Time to check your blood pressure (1 minute delay)',
+                title: '1 Minute Notification',
+                body: 'This notification was scheduled for 1 minute',
                 scheduledDate: scheduledTime,
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Health tracking reminder scheduled for 1 minute')),
+                  const SnackBar(content: Text('Notification scheduled for 1 minute')),
                 );
               }
             },
-            icon: const Icon(Icons.favorite),
-            label: const Text('Schedule Health Tracking Reminder'),
-          ),
-          const SizedBox(height: 8),
-
-          // Appointment Reminder
-          ElevatedButton.icon(
-            onPressed: () async {
-              final scheduledTime = DateTime.now().add(const Duration(minutes: 2));
-              await notificationService.scheduleAppointmentReminder(
-                id: 4,
-                title: 'Test Appointment',
-                body: 'Upcoming doctor appointment (2 minutes delay)',
-                scheduledDate: scheduledTime,
-              );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Appointment reminder scheduled for 2 minutes')),
-                );
-              }
-            },
-            icon: const Icon(Icons.calendar_today),
-            label: const Text('Schedule Appointment Reminder'),
+            icon: const Icon(Icons.access_time),
+            label: const Text('Schedule 1 Minute Notification'),
           ),
           const SizedBox(height: 16),
 
@@ -145,6 +157,36 @@ class TestNotificationsScreen extends StatelessWidget {
             label: const Text('Cancel All Notifications'),
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 16),
+
+          // Troubleshooting Section
+          Text(
+            'Troubleshooting',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'If notifications are not working:',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('1. Check if app notifications are enabled in device settings'),
+                  const Text('2. Ensure "All Notifications" is turned on above'),
+                  const Text('3. Try restarting the app'),
+                  const Text('4. Check if Do Not Disturb is enabled on your device'),
+                ],
+              ),
             ),
           ),
         ],

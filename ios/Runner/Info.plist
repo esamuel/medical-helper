@@ -26,8 +26,27 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to scan QR codes for medication information.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs photo library access to upload profile pictures and medical documents.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for voice notes in medical records.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to find nearby pharmacies and medical facilities.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs location access to find nearby medical facilities in case of emergency.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>This app uses Face ID to securely access your medical information.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs calendar access to schedule medical appointments and medication reminders.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>This app needs contacts access to add emergency contacts.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -45,5 +64,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>This app needs notification permissions to send medication reminders and important health updates.</string>
 </dict>
 </plist>

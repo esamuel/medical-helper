@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:math';
+import 'health_resume_screen.dart';
 
 enum BloodPressureCategory {
   normal,

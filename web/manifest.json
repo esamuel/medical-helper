@@ -1,13 +1,16 @@
 {
-    "name": "medical_helper",
-    "short_name": "medical_helper",
+    "name": "Medical Helper",
+    "short_name": "Medical Helper",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1ABC9C",
     "theme_color": "#1ABC9C",
-    "description": "A new Flutter project.",
+    "description": "A medical helper application",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "permissions": [
+        "notifications"
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

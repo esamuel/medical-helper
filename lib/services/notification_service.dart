@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'dart:js' as js;
+import 'package:js/js_util.dart';
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
@@ -11,8 +14,21 @@ class NotificationService {
   }
 
   Future<void> initializeService() async {
-    await _initializeTimeZone();
-    await _initializeNotifications();
+    if (kIsWeb) {
+      await _initializeWebNotifications();
+    } else {
+      await _initializeTimeZone();
+      await _initializeNotifications();
+    }
+  }
+
+  Future<void> _initializeWebNotifications() async {
+    // Web notifications are handled through the browser's API
+    if (js.context.hasProperty('Notification')) {
+      debugPrint('Web notifications are supported');
+    } else {
+      debugPrint('Web notifications are not supported');
+    }
   }
 
   Future<void> _initializeTimeZone() async {
@@ -35,63 +51,106 @@ class NotificationService {
     await _notifications.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap
-        print('Notification tapped: ${response.payload}');
+        debugPrint('Notification tapped: ${response.payload}');
       },
     );
   }
 
-  Future<void> requestPermissions() async {
-    if (_notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>() != null) {
-      await _notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+  Future<String?> requestPermissions() async {
+    if (kIsWeb) {
+      try {
+        if (js.context.hasProperty('Notification')) {
+          final result = await promiseToFuture(js.context.callMethod('eval', ['''
+            (async function() {
+              if ("Notification" in window) {
+                const permission = await Notification.requestPermission();
+                return permission;
+              }
+              return "denied";
+            })()
+          ''']));
+          
+          debugPrint('Web notification permission result: $result');
+          return result as String;
+        } else {
+          debugPrint('Notifications not supported in this browser');
+          return 'not_supported';
+        }
+      } catch (e) {
+        debugPrint('Error requesting web notification permission: $e');
+        return 'error';
+      }
+    } else if (_notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>() != null) {
+      final granted = await _notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(
             alert: true,
             badge: true,
             sound: true,
           );
+      return granted == true ? 'granted' : 'denied';
+    }
+    return null;
+  }
+
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (kIsWeb) {
+      try {
+        if (js.context.hasProperty('Notification')) {
+          js.context.callMethod('eval', ['''
+            (function() {
+              if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("$title", { 
+                  body: "$body",
+                  icon: "/favicon.ico"
+                });
+              }
+            })();
+          ''']);
+        }
+      } catch (e) {
+        debugPrint('Error showing web notification: $e');
+      }
+    } else {
+      await _notifications.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'default_channel',
+            'Default Notifications',
+            channelDescription: 'Default notification channel',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/launcher_icon',
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+      );
     }
   }
 
-  // Schedule a medication reminder
-  Future<void> scheduleMedicationReminder({
+  Future<void> scheduleNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledDate,
   }) async {
-    await _notifications.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'medication_channel',
-          'Medication Reminders',
-          channelDescription: 'Notifications for medication reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/launcher_icon',
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  }
+    if (kIsWeb) {
+      // Web platform doesn't support scheduled notifications directly
+      // You might want to implement a custom solution using service workers
+      debugPrint('Scheduled notifications are not supported on web');
+      return;
+    }
 
-  // Schedule a health tracking reminder
-  Future<void> scheduleHealthTrackingReminder({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
     await _notifications.zonedSchedule(
       id,
       title,
@@ -99,42 +158,9 @@ class NotificationService {
       tz.TZDateTime.from(scheduledDate, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'health_channel',
-          'Health Tracking',
-          channelDescription: 'Notifications for health tracking reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/launcher_icon',
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  }
-
-  // Schedule an appointment reminder
-  Future<void> scheduleAppointmentReminder({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
-    await _notifications.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'appointment_channel',
-          'Appointments',
-          channelDescription: 'Notifications for medical appointments',
+          'scheduled_channel',
+          'Scheduled Notifications',
+          channelDescription: 'Channel for scheduled notifications',
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/launcher_icon',
@@ -150,62 +176,35 @@ class NotificationService {
     );
   }
 
-  // Send an emergency update notification
-  Future<void> showEmergencyNotification({
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    await _notifications.show(
-      id,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'emergency_channel',
-          'Emergency Updates',
-          channelDescription: 'Notifications for emergency updates',
-          importance: Importance.max,
-          priority: Priority.max,
-          icon: '@mipmap/launcher_icon',
-          color: Colors.red,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-    );
-  }
-
-  // Cancel a specific notification
   Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id);
+    if (!kIsWeb) {
+      await _notifications.cancel(id);
+    }
   }
 
-  // Cancel all notifications
   Future<void> cancelAllNotifications() async {
-    await _notifications.cancelAll();
+    if (!kIsWeb) {
+      await _notifications.cancelAll();
+    }
   }
 
-  // Cancel medication reminders
   Future<void> cancelMedicationReminders(String medicationId) async {
-    // Convert medicationId to a unique notification ID
-    final notificationId = medicationId.hashCode;
-    await cancelNotification(notificationId);
+    if (!kIsWeb) {
+      final notificationId = medicationId.hashCode;
+      await cancelNotification(notificationId);
+    }
   }
 
-  // Schedule medication reminders
   Future<void> scheduleMedicationReminders(medication) async {
-    // Convert medicationId to a unique notification ID
-    final notificationId = medication.id.hashCode;
-    
-    await scheduleMedicationReminder(
-      id: notificationId,
-      title: 'Time to take ${medication.name}',
-      body: 'Take ${medication.dosage} ${medication.instructions}',
-      scheduledDate: DateTime.now().add(const Duration(minutes: 1)), // Example time
-    );
+    if (!kIsWeb) {
+      final notificationId = medication.id.hashCode;
+      
+      await scheduleNotification(
+        id: notificationId,
+        title: 'Time to take ${medication.name}',
+        body: 'Take ${medication.dosage} ${medication.instructions}',
+        scheduledDate: DateTime.now().add(const Duration(minutes: 1)),
+      );
+    }
   }
 } 

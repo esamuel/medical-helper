@@ -18,21 +18,127 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="A medical helper application">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="medical_helper">
+  <meta name="apple-mobile-web-app-title" content="Medical Helper">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>medical_helper</title>
+  <title>Medical Helper</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Initialize notification support
+    function initializeNotifications() {
+      if ('Notification' in window) {
+        console.log('Notifications are supported');
+        
+        // Check if permission is already granted
+        if (Notification.permission === 'granted') {
+          console.log('Notification permission already granted');
+        } else if (Notification.permission !== 'denied') {
+          console.log('Notification permission not yet requested');
+        }
+      } else {
+        console.log('Notifications are not supported');
+      }
+    }
+
+    // Initialize service worker for notifications
+    async function initializeServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register('flutter_service_worker.js');
+          console.log('ServiceWorker registration successful');
+          
+          // Set up notification click handler
+          registration.addEventListener('notificationclick', function(event) {
+            event.notification.close();
+            // Add any custom click handling here
+          });
+        } catch (error) {
+          console.log('ServiceWorker registration failed:', error);
+        }
+      }
+    }
+
+    // Initialize when the page loads
+    window.addEventListener('load', function() {
+      initializeNotifications();
+      initializeServiceWorker();
+    });
+  </script>
 </head>
 <body>
+  <script>
+    var serviceWorkerVersion = null;
+    var scriptLoaded = false;
+    function loadMainDartJs() {
+      if (scriptLoaded) {
+        return;
+      }
+      scriptLoaded = true;
+      var scriptTag = document.createElement('script');
+      scriptTag.src = 'main.dart.js';
+      scriptTag.type = 'application/javascript';
+      document.body.append(scriptTag);
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('flutter_service_worker.js').then(function(reg) {
+          reg.update();
+
+          var serviceWorkerUrl = 'flutter_service_worker.js?v=' + serviceWorkerVersion;
+
+          reg.addEventListener('updatefound', function() {
+            if (navigator.serviceWorker.controller) {
+              var installingWorker = reg.installing;
+              installingWorker.onstatechange = function() {
+                switch (installingWorker.state) {
+                  case 'installed':
+                    if (navigator.serviceWorker.controller) {
+                      console.log('New or updated content is available.');
+                    } else {
+                      console.log('Content is now available offline!');
+                    }
+                    break;
+                  case 'redundant':
+                    console.error('The installing service worker became redundant.');
+                    break;
+                }
+              };
+            }
+          });
+
+          // Check for service worker update every hour
+          setInterval(() => {
+            reg.update();
+          }, 3600000); // 1 hour
+        });
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', serviceWorkerUrl);
+        xhr.send();
+
+        setTimeout(() => {
+          if (!scriptLoaded) {
+            console.warn(
+              'Failed to load app from service worker. Falling back to plain <script> tag.',
+            );
+            loadMainDartJs();
+          }
+        }, 4000);
+      });
+    } else {
+      loadMainDartJs();
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
