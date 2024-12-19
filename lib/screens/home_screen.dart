@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
-import 'health/health_data_screen.dart';
+import 'health_data_screen.dart';
 import 'medications/medications_screen.dart';
 import 'profile/profile_screen.dart';
 import 'emergency_contacts_screen.dart';
@@ -46,7 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () {
                   themeProvider.toggleTheme();
                 },
-                tooltip: themeProvider.isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                tooltip: themeProvider.isDarkMode
+                    ? 'Switch to Light Mode'
+                    : 'Switch to Dark Mode',
               );
             },
           ),
@@ -85,4 +87,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-} 
+}

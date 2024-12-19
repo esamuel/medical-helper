@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../add_blood_pressure_screen.dart';
-import '../add_weight_screen.dart';
-import '../add_heart_rate_screen.dart';
+import 'add_blood_pressure_screen.dart';
+import 'add_weight_screen.dart';
+import 'add_heart_rate_screen.dart';
 
 class HealthDataScreen extends StatelessWidget {
   const HealthDataScreen({super.key});

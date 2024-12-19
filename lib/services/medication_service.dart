@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/medication_model.dart';
 
@@ -6,112 +7,114 @@ class MedicationService {
   final FirebaseFirestore _firestore;
   final String collection = 'medications';
 
-  MedicationService() : _firestore = FirebaseFirestore.instance {
-    debugPrint('Initializing MedicationService');
-  }
+  String get _userId => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  MedicationService() : _firestore = FirebaseFirestore.instance;
 
   Future<String> addMedication(MedicationModel medication) async {
     try {
-      debugPrint('Adding medication to Firestore: ${medication.toMap()}');
       final docRef = await _firestore.collection(collection).add(medication.toMap());
       debugPrint('Successfully added medication with ID: ${docRef.id}');
       return docRef.id;
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('Error adding medication: $e');
-      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }
 
   Future<void> updateMedication(MedicationModel medication) async {
     try {
-      debugPrint('Updating medication in Firestore: ${medication.toMap()}');
       await _firestore
           .collection(collection)
           .doc(medication.id)
           .update(medication.toMap());
       debugPrint('Successfully updated medication with ID: ${medication.id}');
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('Error updating medication: $e');
-      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }
 
   Future<void> deleteMedication(String medicationId) async {
     try {
-      debugPrint('Deleting medication from Firestore: $medicationId');
       await _firestore.collection(collection).doc(medicationId).delete();
       debugPrint('Successfully deleted medication with ID: $medicationId');
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('Error deleting medication: $e');
-      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }
 
   Stream<List<MedicationModel>> getMedicationsForUser(String userId) {
-    debugPrint('Starting getMedicationsForUser stream for user: $userId');
     return _firestore
         .collection(collection)
         .where('userId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) {
           try {
-            debugPrint('Received Firestore snapshot with ${snapshot.docs.length} documents');
-            
             if (snapshot.docs.isEmpty) {
-              debugPrint('No medications found for user: $userId');
               return [];
             }
 
-            final medications = snapshot.docs.map((doc) {
-              debugPrint('Processing document ID: ${doc.id}');
-              final data = doc.data();
-              debugPrint('Document data: $data');
-
-              try {
-                final medication = MedicationModel.fromMap(data, doc.id);
-                debugPrint('Successfully converted to MedicationModel: ${medication.name}');
-                return medication;
-              } catch (e, stackTrace) {
-                debugPrint('Error converting document to MedicationModel: $e');
-                debugPrint('Stack trace: $stackTrace');
-                return null;
-              }
-            })
-            .where((med) => med != null)  // Filter out null medications
-            .cast<MedicationModel>()  // Cast to non-null MedicationModel
-            .toList();
+            final medications = snapshot.docs
+                .map((doc) {
+                  try {
+                    return MedicationModel.fromMap(doc.data(), doc.id);
+                  } catch (e) {
+                    debugPrint('Error converting document to MedicationModel: $e');
+                    return null;
+                  }
+                })
+                .where((med) => med != null)
+                .cast<MedicationModel>()
+                .toList();
             
             medications.sort((a, b) => b.startDate.compareTo(a.startDate));
-            debugPrint('Returning ${medications.length} sorted medications');
-            for (var med in medications) {
-              debugPrint('Medication in list: ${med.name} (${med.id})');
-            }
             return medications;
-          } catch (e, stackTrace) {
+          } catch (e) {
             debugPrint('Error processing medications stream: $e');
-            debugPrint('Stack trace: $stackTrace');
-            return [];  // Return empty list instead of throwing
+            return [];
           }
         });
   }
 
   Future<MedicationModel?> getMedication(String medicationId) async {
     try {
-      debugPrint('Getting medication from Firestore: $medicationId');
       final doc = await _firestore.collection(collection).doc(medicationId).get();
       if (!doc.exists) {
-        debugPrint('No medication found with ID: $medicationId');
         return null;
       }
-      debugPrint('Found medication: ${doc.data()}');
       return MedicationModel.fromMap(doc.data()!, doc.id);
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('Error getting medication: $e');
-      debugPrint('Stack trace: $stackTrace');
       rethrow;
+    }
+  }
+
+  // Get all medications for the current user (for report)
+  Future<List<Map<String, dynamic>>> getMedications() async {
+    try {
+      if (_userId.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+
+      final snapshot = await _firestore
+          .collection(collection)
+          .where('userId', isEqualTo: _userId)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+                'name': doc.data()['name'] ?? '',
+                'dosage': doc.data()['dosage'] ?? '',
+                'schedule': doc.data()['schedule'] ?? '',
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting medications: $e');
+      return [];
     }
   }
 } 

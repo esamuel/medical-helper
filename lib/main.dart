@@ -13,32 +13,26 @@ import 'services/medication_service.dart';
 import 'services/notification_service.dart';
 import 'providers/theme_provider.dart';
 import 'providers/notification_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // Initialize notification service
+  // Initialize services
   final notificationService = NotificationService();
   await notificationService.initializeService();
   await notificationService.requestPermissions();
   
-  runApp(MyApp(notificationService: notificationService));
-}
-
-class MyApp extends StatelessWidget {
-  final NotificationService notificationService;
-
-  const MyApp({
-    super.key,
-    required this.notificationService,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
+  final prefs = await SharedPreferences.getInstance();
+  final themeProvider = ThemeProvider(prefs);
+  
+  runApp(
+    MultiProvider(
       providers: [
         Provider<AuthService>(
           create: (_) => AuthService(),
@@ -53,31 +47,29 @@ class MyApp extends StatelessWidget {
           create: (context) => context.read<AuthService>().authStateChanges,
           initialData: null,
         ),
-        ChangeNotifierProvider(
-          create: (_) => ThemeProvider(),
+        ChangeNotifierProvider.value(
+          value: themeProvider,
         ),
         ChangeNotifierProvider(
           create: (_) => NotificationProvider(),
         ),
       ],
       child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            title: 'Medical Helper',
-            debugShowCheckedModeBanner: false,
-            theme: themeProvider.themeData,
-            home: const AuthWrapper(),
-            routes: {
-              '/login': (context) => const LoginScreen(),
-              '/register': (context) => const RegisterScreen(),
-              '/forgot-password': (context) => const ForgotPasswordScreen(),
-              '/settings': (context) => const SettingsScreen(),
-            },
-          );
-        },
+        builder: (context, themeProvider, _) => MaterialApp(
+          title: 'Medical Helper',
+          debugShowCheckedModeBanner: false,
+          theme: themeProvider.theme,
+          home: const AuthWrapper(),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+            '/register': (context) => const RegisterScreen(),
+            '/forgot-password': (context) => const ForgotPasswordScreen(),
+            '/settings': (context) => const SettingsScreen(),
+          },
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class AuthWrapper extends StatelessWidget {
