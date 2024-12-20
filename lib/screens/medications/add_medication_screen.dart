@@ -85,7 +85,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
         // Try to schedule notifications, but don't let failures prevent saving
         try {
-          if (_frequency != MedicationFrequency.asNeeded && medicationId != null) {
+          if (_frequency != MedicationFrequency.asNeeded) {
             debugPrint('Scheduling notifications for medication: $medicationId');
             await notificationService.scheduleMedicationReminders(
               medication.copyWith(id: medicationId),

@@ -81,7 +81,7 @@ class NotificationService {
 
         debugPrint('Scheduling notification for ${medication.name} at $scheduledDate');
 
-        final notificationDetails = NotificationDetails(
+        const notificationDetails = NotificationDetails(
           android: AndroidNotificationDetails(
             'medication_reminders',
             'Medication Reminders',
@@ -89,7 +89,7 @@ class NotificationService {
             importance: Importance.high,
             priority: Priority.high,
           ),
-          iOS: const DarwinNotificationDetails(
+          iOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
