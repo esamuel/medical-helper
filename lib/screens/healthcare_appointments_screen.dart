@@ -242,16 +242,16 @@ class _HealthcareAppointmentsScreenState
                 if (hasReminder)
                   DropdownButtonFormField<int>(
                     value: reminderMinutes,
-                    items: [
-                      const DropdownMenuItem(
+                    items: const [
+                      DropdownMenuItem(
                           value: 15, child: Text('15 minutes before')),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                           value: 30, child: Text('30 minutes before')),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                           value: 60, child: Text('1 hour before')),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                           value: 120, child: Text('2 hours before')),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                           value: 1440, child: Text('1 day before')),
                     ],
                     onChanged: (value) =>

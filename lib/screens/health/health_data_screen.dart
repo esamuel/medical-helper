@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:math';
+import '../settings/settings_screen.dart';
 
 enum BloodPressureCategory {
   normal,
@@ -45,15 +46,15 @@ class BloodPressureReading {
   Color get categoryColor {
     switch (category) {
       case BloodPressureCategory.normal:
-        return Colors.green;
+        return const Color(0xFF80CBC4);
       case BloodPressureCategory.elevated:
-        return Colors.yellow.shade800;
+        return const Color(0xFFFFB74D);
       case BloodPressureCategory.hypertensionStage1:
-        return Colors.orange;
+        return const Color(0xFFFF9800);
       case BloodPressureCategory.hypertensionStage2:
-        return Colors.red;
+        return const Color(0xFFF44336);
       case BloodPressureCategory.hypertensiveCrisis:
-        return Colors.purple;
+        return const Color(0xFFD32F2F);
     }
   }
 
@@ -93,20 +94,9 @@ class BloodPressureReading {
   }
 }
 
-enum BloodSugarCategory {
-  low,
-  normal,
-  preDiabetes,
-  diabetes,
-  high
-}
+enum BloodSugarCategory { low, normal, preDiabetes, diabetes, high }
 
-enum MealTime {
-  fasting,
-  beforeMeal,
-  afterMeal,
-  bedtime
-}
+enum MealTime { fasting, beforeMeal, afterMeal, bedtime }
 
 class BloodSugarReading {
   final double value;
@@ -149,15 +139,15 @@ class BloodSugarReading {
   Color get categoryColor {
     switch (category) {
       case BloodSugarCategory.low:
-        return Colors.purple;
+        return const Color(0xFF9575CD);
       case BloodSugarCategory.normal:
-        return Colors.green;
+        return const Color(0xFF80CBC4);
       case BloodSugarCategory.preDiabetes:
-        return Colors.orange;
+        return const Color(0xFFFF9800);
       case BloodSugarCategory.diabetes:
-        return Colors.red;
+        return const Color(0xFFF44336);
       case BloodSugarCategory.high:
-        return Colors.deepPurple;
+        return const Color(0xFF673AB7);
     }
   }
 
@@ -208,13 +198,7 @@ class BloodSugarReading {
   }
 }
 
-enum BMICategory {
-  underweight,
-  normal,
-  overweight,
-  obese,
-  extremelyObese
-}
+enum BMICategory { underweight, normal, overweight, obese, extremelyObese }
 
 class WeightReading {
   final double weight;
@@ -242,15 +226,15 @@ class WeightReading {
   Color get categoryColor {
     switch (category) {
       case BMICategory.underweight:
-        return Colors.blue;
+        return const Color(0xFF64B5F6);
       case BMICategory.normal:
-        return Colors.green;
+        return const Color(0xFF80CBC4);
       case BMICategory.overweight:
-        return Colors.orange;
+        return const Color(0xFFFF9800);
       case BMICategory.obese:
-        return Colors.red;
+        return const Color(0xFFF44336);
       case BMICategory.extremelyObese:
-        return Colors.purple;
+        return const Color(0xFF673AB7);
     }
   }
 
@@ -288,12 +272,7 @@ class WeightReading {
   }
 }
 
-enum HeartRateCategory {
-  bradycardia,
-  normal,
-  elevated,
-  tachycardia
-}
+enum HeartRateCategory { bradycardia, normal, elevated, tachycardia }
 
 enum ActivityType {
   resting,
@@ -326,13 +305,13 @@ class HeartRateReading {
   Color get categoryColor {
     switch (category) {
       case HeartRateCategory.bradycardia:
-        return Colors.blue;
+        return const Color(0xFF64B5F6);
       case HeartRateCategory.normal:
-        return Colors.green;
+        return const Color(0xFF80CBC4);
       case HeartRateCategory.elevated:
-        return Colors.orange;
+        return const Color(0xFFFF9800);
       case HeartRateCategory.tachycardia:
-        return Colors.red;
+        return const Color(0xFFF44336);
     }
   }
 
@@ -387,7 +366,8 @@ class HealthMetric {
   final String id;
   final String userId;
   final DateTime timestamp;
-  final dynamic value; // Can be double, BloodPressureReading, BloodSugarReading, WeightReading, or HeartRateReading
+  final dynamic
+      value; // Can be double, BloodPressureReading, BloodSugarReading, WeightReading, or HeartRateReading
   final String unit;
   final String type;
   final String notes;
@@ -444,9 +424,9 @@ class HealthMetric {
       value = BloodSugarReading(
         value: (map['value'] as num).toDouble(),
         timestamp: timestamp,
-        mealTime: map['mealTime'] != null 
-          ? MealTime.values[map['mealTime'] as int]
-          : MealTime.beforeMeal,
+        mealTime: map['mealTime'] != null
+            ? MealTime.values[map['mealTime'] as int]
+            : MealTime.beforeMeal,
         notes: map['notes'] as String? ?? '',
       );
     } else if (type == 'Weight') {
@@ -460,9 +440,9 @@ class HealthMetric {
       value = HeartRateReading(
         value: map['value'] as int,
         timestamp: timestamp,
-        activity: map['activity'] != null 
-          ? ActivityType.values[map['activity'] as int]
-          : ActivityType.resting,
+        activity: map['activity'] != null
+            ? ActivityType.values[map['activity'] as int]
+            : ActivityType.resting,
         notes: map['notes'] as String? ?? '',
       );
     } else {
@@ -491,7 +471,8 @@ class HealthDataScreen extends StatefulWidget {
 class _HealthDataScreenState extends State<HealthDataScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
+  bool _isDarkMode = true;
+
   final Map<String, List<HealthMetric>> _healthData = {
     'Blood Pressure': [],
     'Heart Rate': [],
@@ -525,8 +506,18 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   @override
   void initState() {
     super.initState();
+    _checkAuthState();
     _loadHealthData();
     _loadLastHeight();
+  }
+
+  void _checkAuthState() {
+    final user = _auth.currentUser;
+    debugPrint('Current auth state - User: ${user?.uid}');
+    debugPrint('Current auth state - Email: ${user?.email}');
+    debugPrint('Current auth state - Is Anonymous: ${user?.isAnonymous}');
+    debugPrint(
+        'Current auth state - Is Email Verified: ${user?.emailVerified}');
   }
 
   @override
@@ -556,10 +547,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       final userId = _auth.currentUser?.uid;
       if (userId == null) return;
 
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .get();
+      final snapshot = await _firestore.collection('users').doc(userId).get();
 
       if (snapshot.exists) {
         final data = snapshot.data();
@@ -594,7 +582,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   Future<void> _loadHealthData() async {
     if (!mounted) return;
-    
+
     try {
       final userId = _auth.currentUser?.uid;
       if (userId == null) {
@@ -654,9 +642,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             value = BloodSugarReading(
               value: (map['value'] as num).toDouble(),
               timestamp: timestamp,
-              mealTime: map['mealTime'] != null 
-                ? MealTime.values[map['mealTime'] as int]
-                : MealTime.beforeMeal,
+              mealTime: map['mealTime'] != null
+                  ? MealTime.values[map['mealTime'] as int]
+                  : MealTime.beforeMeal,
               notes: map['notes'] as String? ?? '',
             );
           } else if (type == 'Weight') {
@@ -670,9 +658,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             value = HeartRateReading(
               value: (map['value'] as num).toInt(),
               timestamp: timestamp,
-              activity: map['activity'] != null 
-                ? ActivityType.values[map['activity'] as int]
-                : ActivityType.resting,
+              activity: map['activity'] != null
+                  ? ActivityType.values[map['activity'] as int]
+                  : ActivityType.resting,
               notes: map['notes'] as String? ?? '',
             );
           } else {
@@ -695,7 +683,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             });
           }
 
-          debugPrint('Added metric to category: $type with value: $value at $timestamp');
+          debugPrint(
+              'Added metric to category: $type with value: $value at $timestamp');
         } catch (e, stackTrace) {
           debugPrint('Error processing document ${doc.id}: $e');
           debugPrint('Stack trace: $stackTrace');
@@ -708,9 +697,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     } catch (e, stackTrace) {
       debugPrint('Error loading health data: $e');
       debugPrint('Stack trace: $stackTrace');
-      
+
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -728,7 +717,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     String notes = '',
   }) async {
     try {
-      final userId = _auth.currentUser?.uid;
+      final user = _auth.currentUser;
+      debugPrint('Adding health metric - Auth state check:');
+      debugPrint('User: ${user?.uid}');
+      debugPrint('Email: ${user?.email}');
+      debugPrint('Is Anonymous: ${user?.isAnonymous}');
+      debugPrint('Is Email Verified: ${user?.emailVerified}');
+
+      final userId = user?.uid;
       if (userId == null) {
         debugPrint('No user ID found when trying to add health metric');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -745,7 +741,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       debugPrint('Unit: $unit');
       debugPrint('Value: $value');
       debugPrint('Notes: $notes');
-      
+      debugPrint('User ID: $userId');
+
       final timestamp = DateTime.now();
       final docId = '${userId}_${timestamp.millisecondsSinceEpoch}';
 
@@ -764,10 +761,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       debugPrint('Document ID: $docId');
       debugPrint('Document data: $data');
 
-      await _firestore
-          .collection('health_metrics')
-          .doc(docId)
-          .set(data);
+      await _firestore.collection('health_metrics').doc(docId).set(data);
 
       debugPrint('Successfully saved to Firestore');
 
@@ -786,9 +780,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     } catch (e, stackTrace) {
       debugPrint('Error saving health metric: $e');
       debugPrint('Stack trace: $stackTrace');
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error saving health metric: $e'),
@@ -804,7 +798,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       setState(() {
         _healthData[_selectedMetric]?.removeAt(index);
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -914,7 +908,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 if (heartRate < 30 || heartRate > 220) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please enter a realistic heart rate (30-220 BPM)'),
+                      content: Text(
+                          'Please enter a realistic heart rate (30-220 BPM)'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -942,7 +937,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 } catch (e, stackTrace) {
                   debugPrint('Error creating heart rate reading: $e');
                   debugPrint('Stack trace: $stackTrace');
-                  
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Error saving heart rate: $e'),
@@ -1084,9 +1079,12 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 return;
               }
 
-              if (systolic < 70 || systolic > 250 ||
-                  diastolic < 40 || diastolic > 150 ||
-                  pulse < 40 || pulse > 200) {
+              if (systolic < 70 ||
+                  systolic > 250 ||
+                  diastolic < 40 ||
+                  diastolic > 150 ||
+                  pulse < 40 ||
+                  pulse > 200) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Please enter realistic values'),
@@ -1210,7 +1208,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               if (value < 20 || value > 600) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Please enter a realistic blood sugar value (20-600 mg/dL)'),
+                    content: Text(
+                        'Please enter a realistic blood sugar value (20-600 mg/dL)'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -1297,7 +1296,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           ),
           FilledButton(
             onPressed: () {
-              if (_valueController.text.isEmpty || _heightController.text.isEmpty) {
+              if (_valueController.text.isEmpty ||
+                  _heightController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Please fill in all required fields'),
@@ -1369,13 +1369,58 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return DefaultTabController(
       length: _healthData.length,
       child: Scaffold(
+        backgroundColor: const Color(0xFF00695C), // Dark teal background
         appBar: AppBar(
-          title: const Text('Health Data'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          title: const Text(
+            'Medical Helper',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          backgroundColor: const Color(0xFF00695C), // Dark teal background
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.print, color: Colors.white),
+              onPressed: () {
+                // Add print functionality
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.dark_mode, color: Colors.white),
+              onPressed: () {
+                setState(() {
+                  _isDarkMode = !_isDarkMode;
+                });
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
           bottom: TabBar(
             isScrollable: true,
+            indicatorColor: Colors.white,
             tabs: _healthData.keys.map((String metric) {
-              return Tab(text: metric);
+              return Tab(
+                child: Text(
+                  metric,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              );
             }).toList(),
             onTap: (index) {
               setState(() {
@@ -1384,92 +1429,155 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             },
           ),
         ),
-        body: TabBarView(
-          children: _healthData.entries.map((entry) {
-            final metrics = entry.value;
-            return metrics.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+        body: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1A1A1A), // Dark background for the content
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: TabBarView(
+            children: _healthData.entries.map((entry) {
+              final metrics = entry.value;
+              return metrics.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.show_chart,
+                            size: 64,
+                            color: Colors.white.withOpacity(0.6),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No ${entry.key} data yet',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tap the + button to add data',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.6),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
                       children: [
-                        Icon(
-                          Icons.show_chart,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No ${entry.key} data yet',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap the + button to add data',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        if (entry.key == 'Blood Pressure')
+                          _buildBloodPressureGraph()
+                        else if (entry.key == 'Blood Sugar')
+                          _buildBloodSugarGraph()
+                        else if (entry.key == 'Weight')
+                          _buildWeightGraph()
+                        else if (entry.key == 'Heart Rate')
+                          _buildHeartRateGraph(),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: metrics.length,
+                            itemBuilder: (context, index) {
+                              final metric = metrics[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                color: const Color(
+                                    0xFF2A2A2A), // Dark card background
+                                child: ListTile(
+                                  title: metric.type == 'Blood Pressure'
+                                      ? _buildBloodPressureTitle(
+                                          metric.value as BloodPressureReading)
+                                      : metric.type == 'Blood Sugar'
+                                          ? _buildBloodSugarTitle(
+                                              metric.value as BloodSugarReading)
+                                          : metric.type == 'Weight'
+                                              ? _buildWeightTitle(
+                                                  metric.value as WeightReading)
+                                              : metric.type == 'Heart Rate'
+                                                  ? _buildHeartRateTitle(
+                                                      metric.value
+                                                          as HeartRateReading)
+                                                  : Text(
+                                                      '${metric.value} ${metric.unit}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        DateFormat('MMM d, y - h:mm a')
+                                            .format(metric.timestamp),
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.6),
+                                        ),
+                                      ),
+                                      if (metric.notes.isNotEmpty)
+                                        Text(
+                                          'Notes: ${metric.notes}',
+                                          style: TextStyle(
+                                            color:
+                                                Colors.white.withOpacity(0.6),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.white,
+                                    ),
+                                    onPressed: () =>
+                                        _deleteHealthMetric(metric.id, index),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ],
-                    ),
-                  )
-                : Column(
-                    children: [
-                      if (entry.key == 'Blood Pressure') 
-                        _buildBloodPressureGraph()
-                      else if (entry.key == 'Blood Sugar')
-                        _buildBloodSugarGraph()
-                      else if (entry.key == 'Weight')
-                        _buildWeightGraph()
-                      else if (entry.key == 'Heart Rate')
-                        _buildHeartRateGraph(),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: metrics.length,
-                          itemBuilder: (context, index) {
-                            final metric = metrics[index];
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: ListTile(
-                                title: metric.type == 'Blood Pressure'
-                                    ? _buildBloodPressureTitle(metric.value as BloodPressureReading)
-                                    : metric.type == 'Blood Sugar'
-                                        ? _buildBloodSugarTitle(metric.value as BloodSugarReading)
-                                        : metric.type == 'Weight'
-                                            ? _buildWeightTitle(metric.value as WeightReading)
-                                            : metric.type == 'Heart Rate'
-                                                ? _buildHeartRateTitle(metric.value as HeartRateReading)
-                                                : Text(
-                                                    '${metric.value} ${metric.unit}',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      DateFormat('MMM d, y - h:mm a')
-                                          .format(metric.timestamp),
-                                    ),
-                                    if (metric.notes.isNotEmpty)
-                                      Text('Notes: ${metric.notes}'),
-                                  ],
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete),
-                                  onPressed: () => _deleteHealthMetric(metric.id, index),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-          }).toList(),
+                    );
+            }).toList(),
+          ),
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: _addHealthData,
-          child: const Icon(Icons.add),
+          backgroundColor: const Color(0xFF00695C),
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: const Color(0xFF1A1A1A),
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.white.withOpacity(0.6),
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.monitor_heart),
+              label: 'Health Data',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.medication),
+              label: 'Medications',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.emergency),
+              label: 'Emergency',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
         ),
       ),
     );
@@ -1518,7 +1626,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Widget _buildBloodPressureGraph() {
-    if (_selectedMetric != 'Blood Pressure' || _healthData['Blood Pressure']?.isEmpty == true) {
+    if (_selectedMetric != 'Blood Pressure' ||
+        _healthData['Blood Pressure']?.isEmpty == true) {
       return const SizedBox.shrink();
     }
 
@@ -1566,11 +1675,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         reservedSize: 30,
                         interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 && value.toInt() < readings.length) {
+                          if (value.toInt() >= 0 &&
+                              value.toInt() < readings.length) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                DateFormat('MM/dd').format(readings[value.toInt()].timestamp),
+                                DateFormat('MM/dd')
+                                    .format(readings[value.toInt()].timestamp),
                                 style: const TextStyle(fontSize: 10),
                               ),
                             );
@@ -1591,7 +1702,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     // Systolic line
                     LineChartBarData(
                       spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(), readings[index].systolic.toDouble());
+                        return FlSpot(index.toDouble(),
+                            readings[index].systolic.toDouble());
                       }),
                       isCurved: true,
                       color: Colors.red,
@@ -1601,7 +1713,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     // Diastolic line
                     LineChartBarData(
                       spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(), readings[index].diastolic.toDouble());
+                        return FlSpot(index.toDouble(),
+                            readings[index].diastolic.toDouble());
                       }),
                       isCurved: true,
                       color: Colors.blue,
@@ -1672,7 +1785,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Widget _buildBloodSugarGraph() {
-    if (_selectedMetric != 'Blood Sugar' || _healthData['Blood Sugar']?.isEmpty == true) {
+    if (_selectedMetric != 'Blood Sugar' ||
+        _healthData['Blood Sugar']?.isEmpty == true) {
       return const SizedBox.shrink();
     }
 
@@ -1720,11 +1834,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         reservedSize: 30,
                         interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 && value.toInt() < readings.length) {
+                          if (value.toInt() >= 0 &&
+                              value.toInt() < readings.length) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                DateFormat('MM/dd').format(readings[value.toInt()].timestamp),
+                                DateFormat('MM/dd')
+                                    .format(readings[value.toInt()].timestamp),
                                 style: const TextStyle(fontSize: 10),
                               ),
                             );
@@ -1773,7 +1889,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               runSpacing: 8,
               children: MealTime.values.map((time) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -1888,11 +2005,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         reservedSize: 30,
                         interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 && value.toInt() < readings.length) {
+                          if (value.toInt() >= 0 &&
+                              value.toInt() < readings.length) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                DateFormat('MM/dd').format(readings[value.toInt()].timestamp),
+                                DateFormat('MM/dd')
+                                    .format(readings[value.toInt()].timestamp),
                                 style: const TextStyle(fontSize: 10),
                               ),
                             );
@@ -1970,7 +2089,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       height: 1.7,
       timestamp: DateTime.now(),
     );
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -2030,7 +2149,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Widget _buildHeartRateGraph() {
-    if (_selectedMetric != 'Heart Rate' || _healthData['Heart Rate']?.isEmpty == true) {
+    if (_selectedMetric != 'Heart Rate' ||
+        _healthData['Heart Rate']?.isEmpty == true) {
       return const SizedBox.shrink();
     }
 
@@ -2074,7 +2194,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     getDrawingHorizontalLine: (value) {
                       Color color = Colors.grey.withOpacity(0.3);
                       double strokeWidth = 0.5;
-                      
+
                       // Add reference lines for heart rate zones
                       if (value == 60) {
                         color = Colors.blue.withOpacity(0.3);
@@ -2086,7 +2206,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         color = Colors.red.withOpacity(0.3);
                         strokeWidth = 1;
                       }
-                      
+
                       return FlLine(
                         color: color,
                         strokeWidth: strokeWidth,
@@ -2107,11 +2227,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         reservedSize: 30,
                         interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 && value.toInt() < readings.length) {
+                          if (value.toInt() >= 0 &&
+                              value.toInt() < readings.length) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                DateFormat('HH:mm').format(readings[value.toInt()].timestamp),
+                                DateFormat('HH:mm')
+                                    .format(readings[value.toInt()].timestamp),
                                 style: const TextStyle(fontSize: 10),
                               ),
                             );
@@ -2131,7 +2253,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   lineBarsData: [
                     LineChartBarData(
                       spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(), readings[index].value.toDouble());
+                        return FlSpot(
+                            index.toDouble(), readings[index].value.toDouble());
                       }),
                       isCurved: true,
                       color: Colors.blue,
@@ -2171,7 +2294,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               runSpacing: 8,
               children: ActivityType.values.map((activity) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -2195,7 +2319,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       timestamp: DateTime.now(),
       activity: ActivityType.resting,
     );
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -2236,4 +2360,4 @@ class _LegendItem extends StatelessWidget {
       ],
     );
   }
-} 
+}

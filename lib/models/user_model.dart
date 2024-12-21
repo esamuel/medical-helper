@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class UserModel {
   final String id;
   final String email;
@@ -30,7 +32,7 @@ class UserModel {
       'fullName': fullName,
       'phoneNumber': phoneNumber,
       'bloodType': bloodType,
-      'dateOfBirth': dateOfBirth.toIso8601String(),
+      'dateOfBirth': Timestamp.fromDate(dateOfBirth),
       'allergies': allergies,
       'medications': medications,
       'insuranceProvider': insuranceProvider,
@@ -45,11 +47,13 @@ class UserModel {
       fullName: map['fullName'] ?? '',
       phoneNumber: map['phoneNumber'],
       bloodType: map['bloodType'],
-      dateOfBirth: DateTime.parse(map['dateOfBirth']),
+      dateOfBirth: map['dateOfBirth'] is Timestamp
+          ? (map['dateOfBirth'] as Timestamp).toDate()
+          : DateTime.parse(map['dateOfBirth'].toString()),
       allergies: List<String>.from(map['allergies'] ?? []),
       medications: List<String>.from(map['medications'] ?? []),
       insuranceProvider: map['insuranceProvider'],
       insuranceNumber: map['insuranceNumber'],
     );
   }
-} 
+}

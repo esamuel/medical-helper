@@ -3,13 +3,30 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import '../models/medication_model.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._();
   factory NotificationService() => _instance;
 
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
+
+  static const _notificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'medication_reminders',
+      'Medication Reminders',
+      channelDescription: 'Reminders to take medications',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    ),
+  );
 
   NotificationService._();
 
@@ -19,7 +36,8 @@ class NotificationService {
     debugPrint('Initializing NotificationService');
     tz.initializeTimeZones();
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -39,12 +57,47 @@ class NotificationService {
 
   Future<void> requestPermissions() async {
     await initialize();
-    await _notifications.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>()?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+  }
+
+  Future<void> scheduleMedicationReminder({
+    required int id,
+    required String medicationName,
+    required String dosage,
+    required DateTime scheduledTime,
+    String? instructions,
+  }) async {
+    await initialize();
+    debugPrint(
+        'Scheduling single reminder for medication: $medicationName at $scheduledTime');
+
+    try {
+      await _notifications.zonedSchedule(
+        id,
+        'Time to take $medicationName',
+        'Take $dosage${instructions != null ? ' - $instructions' : ''}',
+        tz.TZDateTime.from(scheduledTime, tz.local),
+        _notificationDetails,
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+
+      debugPrint(
+          'Successfully scheduled single reminder for $medicationName at $scheduledTime');
+    } catch (e, stackTrace) {
+      debugPrint('Error scheduling single medication reminder: $e');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> scheduleMedicationReminders(MedicationModel medication) async {
@@ -77,39 +130,27 @@ class NotificationService {
         }
 
         // Create unique ID for each reminder time
-        final notificationId = '${medication.id}_${time.hour}_${time.minute}'.hashCode;
+        final notificationId =
+            '${medication.id}_${time.hour}_${time.minute}'.hashCode;
 
-        debugPrint('Scheduling notification for ${medication.name} at $scheduledDate');
-
-        const notificationDetails = NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medication_reminders',
-            'Medication Reminders',
-            channelDescription: 'Reminders to take medications',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        );
+        debugPrint(
+            'Scheduling notification for ${medication.name} at $scheduledDate');
 
         // Schedule the notification
         await _notifications.zonedSchedule(
           notificationId,
           'Time to take ${medication.name}',
-          'Take ${medication.dosage} ${medication.instructions.isNotEmpty ? '- ${medication.instructions}' : ''}',
+          'Take ${medication.dosage}${medication.instructions.isNotEmpty ? ' - ${medication.instructions}' : ''}',
           tz.TZDateTime.from(scheduledDate, tz.local),
-          notificationDetails,
+          _notificationDetails,
           androidAllowWhileIdle: true,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.time,
         );
 
-        debugPrint('Successfully scheduled notification for ${medication.name} at $scheduledDate');
+        debugPrint(
+            'Successfully scheduled notification for ${medication.name} at $scheduledDate');
       }
     } catch (e, stackTrace) {
       debugPrint('Error scheduling medication reminders: $e');
@@ -125,7 +166,9 @@ class NotificationService {
     try {
       final notifications = await _notifications.pendingNotificationRequests();
       for (var notification in notifications) {
-        if (notification.id.toString().startsWith(medicationId.hashCode.toString())) {
+        if (notification.id
+            .toString()
+            .startsWith(medicationId.hashCode.toString())) {
           await _notifications.cancel(notification.id);
           debugPrint('Canceled notification with ID: ${notification.id}');
         }
@@ -147,4 +190,4 @@ class NotificationService {
       debugPrint('Stack trace: $stackTrace');
     }
   }
-} 
+}

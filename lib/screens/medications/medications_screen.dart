@@ -13,7 +13,7 @@ class MedicationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final medicationService = context.read<MedicationService>();
     final user = context.watch<User?>();
-    
+
     if (user == null) {
       debugPrint('User is null in MedicationsScreen');
       return const Scaffold(
@@ -22,50 +22,63 @@ class MedicationsScreen extends StatelessWidget {
         ),
       );
     }
-    
+
     debugPrint('Building MedicationsScreen for user: ${user.uid}');
 
     return Scaffold(
+      backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
-        title: const Text('My Medications'),
+        title: const Text(
+          'My Medications',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        backgroundColor: const Color(0xFF00695C),
+        elevation: 0,
       ),
       body: StreamBuilder<List<MedicationModel>>(
-        stream: medicationService.getMedicationsForUser(user.uid),
+        stream: medicationService.getMedicationsStream(user.uid),
         builder: (context, snapshot) {
-          debugPrint('StreamBuilder state: ${snapshot.connectionState}');
-          debugPrint('StreamBuilder hasData: ${snapshot.hasData}');
-          debugPrint('StreamBuilder hasError: ${snapshot.hasError}');
-          debugPrint('StreamBuilder data length: ${snapshot.data?.length ?? 0}');
-          
           if (snapshot.hasError) {
-            debugPrint('StreamBuilder error: ${snapshot.error}');
-            debugPrint('StreamBuilder error stack trace: ${snapshot.stackTrace}');
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline,
                     size: 48,
-                    color: Colors.red,
+                    color: Colors.redAccent.shade200,
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'Error loading medications',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     snapshot.error.toString(),
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 14,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      // Force a rebuild of the screen
                       (context as Element).markNeedsBuild();
                     },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00695C),
+                      foregroundColor: Colors.white,
+                    ),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -74,38 +87,46 @@ class MedicationsScreen extends StatelessWidget {
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
-            debugPrint('StreamBuilder waiting for data...');
             return const Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(
+                color: Color(0xFF80CBC4),
+              ),
             );
           }
 
           final medications = snapshot.data ?? [];
-          debugPrint('StreamBuilder received ${medications.length} medications');
-          for (var med in medications) {
-            debugPrint('Medication in view: ${med.name} (${med.id})');
-          }
 
           if (medications.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.medication_outlined,
                     size: 64,
-                    color: Colors.grey,
+                    color: const Color(0xFF80CBC4).withOpacity(0.6),
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'No medications added yet',
-                    style: TextStyle(fontSize: 18),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: () => _addMedication(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Medication'),
+                    icon: const Icon(
+                      Icons.add,
+                      color: Color(0xFF80CBC4),
+                    ),
+                    label: const Text(
+                      'Add Medication',
+                      style: TextStyle(
+                        color: Color(0xFF80CBC4),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -119,6 +140,7 @@ class MedicationsScreen extends StatelessWidget {
               final medication = medications[index];
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
+                color: const Color(0xFF2A2A2A),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -130,18 +152,29 @@ class MedicationsScreen extends StatelessWidget {
                           Expanded(
                             child: Text(
                               medication.name,
-                              style: Theme.of(context).textTheme.titleLarge,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                           Row(
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _editMedication(context, medication),
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Color(0xFF80CBC4),
+                                ),
+                                onPressed: () =>
+                                    _editMedication(context, medication),
                                 tooltip: 'Edit',
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent.shade200,
+                                ),
                                 onPressed: () => _deleteMedication(
                                   context,
                                   medicationService,
@@ -156,36 +189,52 @@ class MedicationsScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         'Dosage: ${medication.dosage}',
-                        style: Theme.of(context).textTheme.bodyLarge,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.87),
+                          fontSize: 16,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Frequency: ${medication.frequencyText}',
-                        style: Theme.of(context).textTheme.bodyLarge,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.87),
+                          fontSize: 16,
+                        ),
                       ),
                       if (medication.instructions.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
                           'Instructions:',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.87),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         Text(
                           medication.instructions,
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontSize: 14,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 8),
                       Text(
                         'Start Date: ${_formatDate(medication.startDate)}',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 14,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Taking Times: ${medication.formatTakingTimes()}',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -197,7 +246,8 @@ class MedicationsScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addMedication(context),
-        child: const Icon(Icons.add),
+        backgroundColor: const Color(0xFF00695C),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -234,18 +284,36 @@ class MedicationsScreen extends StatelessWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Medication'),
+        backgroundColor: const Color(0xFF2A2A2A),
+        title: const Text(
+          'Delete Medication',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         content: Text(
           'Are you sure you want to delete ${medication.name}?',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.87),
+            fontSize: 16,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCEL'),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Color(0xFF80CBC4)),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('DELETE'),
+            child: Text(
+              'DELETE',
+              style: TextStyle(color: Colors.redAccent.shade200),
+            ),
           ),
         ],
       ),
@@ -256,10 +324,10 @@ class MedicationsScreen extends StatelessWidget {
         // Cancel notifications before deleting
         final notificationService = context.read<NotificationService>();
         await notificationService.cancelMedicationReminders(medication.id);
-        
+
         // Delete the medication
         await medicationService.deleteMedication(medication.id);
-        
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -282,4 +350,4 @@ class MedicationsScreen extends StatelessWidget {
       }
     }
   }
-} 
+}

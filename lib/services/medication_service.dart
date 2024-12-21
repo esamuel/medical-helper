@@ -13,7 +13,8 @@ class MedicationService {
   Future<String> addMedication(MedicationModel medication) async {
     try {
       debugPrint('Adding medication to Firestore: ${medication.toMap()}');
-      final docRef = await _firestore.collection(collection).add(medication.toMap());
+      final docRef =
+          await _firestore.collection(collection).add(medication.toMap());
       debugPrint('Successfully added medication with ID: ${docRef.id}');
       return docRef.id;
     } catch (e, stackTrace) {
@@ -50,29 +51,25 @@ class MedicationService {
     }
   }
 
-  Stream<List<MedicationModel>> getMedicationsForUser(String userId) {
-    debugPrint('Starting getMedicationsForUser stream for user: $userId');
+  Stream<List<MedicationModel>> getMedicationsStream(String userId) {
+    debugPrint('Getting medications stream for user: $userId');
     return _firestore
         .collection(collection)
         .where('userId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) {
-          try {
-            debugPrint('Received Firestore snapshot with ${snapshot.docs.length} documents');
-            
-            if (snapshot.docs.isEmpty) {
-              debugPrint('No medications found for user: $userId');
-              return [];
-            }
-
-            final medications = snapshot.docs.map((doc) {
-              debugPrint('Processing document ID: ${doc.id}');
+      try {
+        debugPrint(
+            'Processing ${snapshot.docs.length} medications from stream');
+        final medications = snapshot.docs
+            .map((doc) {
               final data = doc.data();
-              debugPrint('Document data: $data');
+              debugPrint('Processing document: ${doc.id}');
 
               try {
                 final medication = MedicationModel.fromMap(data, doc.id);
-                debugPrint('Successfully converted to MedicationModel: ${medication.name}');
+                debugPrint(
+                    'Successfully converted to MedicationModel: ${medication.name}');
                 return medication;
               } catch (e, stackTrace) {
                 debugPrint('Error converting document to MedicationModel: $e');
@@ -80,28 +77,29 @@ class MedicationService {
                 return null;
               }
             })
-            .where((med) => med != null)  // Filter out null medications
-            .cast<MedicationModel>()  // Cast to non-null MedicationModel
+            .where((med) => med != null) // Filter out null medications
+            .cast<MedicationModel>() // Cast to non-null MedicationModel
             .toList();
-            
-            medications.sort((a, b) => b.startDate.compareTo(a.startDate));
-            debugPrint('Returning ${medications.length} sorted medications');
-            for (var med in medications) {
-              debugPrint('Medication in list: ${med.name} (${med.id})');
-            }
-            return medications;
-          } catch (e, stackTrace) {
-            debugPrint('Error processing medications stream: $e');
-            debugPrint('Stack trace: $stackTrace');
-            return [];  // Return empty list instead of throwing
-          }
-        });
+
+        medications.sort((a, b) => b.startDate.compareTo(a.startDate));
+        debugPrint('Returning ${medications.length} sorted medications');
+        for (var med in medications) {
+          debugPrint('Medication in list: ${med.name} (${med.id})');
+        }
+        return medications;
+      } catch (e, stackTrace) {
+        debugPrint('Error processing medications stream: $e');
+        debugPrint('Stack trace: $stackTrace');
+        return []; // Return empty list instead of throwing
+      }
+    });
   }
 
   Future<MedicationModel?> getMedication(String medicationId) async {
     try {
       debugPrint('Getting medication from Firestore: $medicationId');
-      final doc = await _firestore.collection(collection).doc(medicationId).get();
+      final doc =
+          await _firestore.collection(collection).doc(medicationId).get();
       if (!doc.exists) {
         debugPrint('No medication found with ID: $medicationId');
         return null;
@@ -114,4 +112,4 @@ class MedicationService {
       rethrow;
     }
   }
-} 
+}

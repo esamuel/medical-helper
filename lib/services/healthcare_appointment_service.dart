@@ -70,9 +70,6 @@ class HealthcareAppointmentService {
       if (_userId.isEmpty) {
         throw Exception('User not authenticated');
       }
-      if (appointmentId == null) {
-        throw Exception('Appointment ID is required for deletion');
-      }
 
       await _firestore.collection(collection).doc(appointmentId).delete();
       print('Appointment deleted successfully'); // Debug print
@@ -163,9 +160,6 @@ class HealthcareAppointmentService {
     try {
       if (_userId.isEmpty) {
         throw Exception('User not authenticated');
-      }
-      if (provider == null) {
-        throw Exception('Provider is required');
       }
 
       final snapshot = await _firestore
