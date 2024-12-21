@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
+import '../../providers/theme_provider.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -91,33 +93,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1A1A1A),
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Text(
             'Please log in to view profile',
-            style: TextStyle(color: Colors.white),
+            style: Theme.of(context).textTheme.bodyLarge,
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         title: const Text(
-          'Profile',
+          'My Profile',
           style: TextStyle(
-            color: Colors.white,
             fontSize: 24,
             fontWeight: FontWeight.w400,
           ),
         ),
-        backgroundColor: const Color(0xFF00695C),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+            ),
+            onPressed: () {
+              themeProvider.toggleTheme();
+            },
+          ),
+        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
@@ -133,13 +145,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icon(
                     Icons.error_outline,
                     size: 48,
-                    color: Colors.redAccent.shade200,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'Error loading profile',
                     style: TextStyle(
-                      color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w500,
                     ),
@@ -149,8 +160,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     snapshot.error.toString(),
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
                       fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
                   ),
                 ],
@@ -176,13 +187,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 20),
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: const Color(0xFF80CBC4),
+                  backgroundColor: Theme.of(context).primaryColor,
                   child: Text(
                     (userData['fullName']?.toString() ?? user.email ?? '?')[0]
                         .toUpperCase(),
                     style: const TextStyle(
                       fontSize: 36,
-                      color: Color(0xFF1A1A1A),
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -191,7 +202,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   userData['fullName']?.toString() ?? 'User',
                   style: const TextStyle(
-                    color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.w500,
                   ),
@@ -200,8 +210,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   user.email ?? '',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
                     fontSize: 16,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -255,7 +265,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: () =>
                         _navigateToEditProfile(context, userData, user.uid),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00695C),
+                      backgroundColor: Theme.of(context).primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -264,7 +274,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: const Text(
                       'Edit Profile',
                       style: TextStyle(
-                        color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -291,7 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required List<Widget> items,
   }) {
     return Card(
-      color: const Color(0xFF2A2A2A),
+      color: Theme.of(context).cardColor,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -299,10 +308,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(
-                color: Color(0xFF80CBC4),
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
+                color: Theme.of(context).textTheme.titleLarge?.color,
               ),
             ),
             const SizedBox(height: 16),
@@ -324,7 +333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Icon(
             icon,
-            color: const Color(0xFF80CBC4),
+            color: Theme.of(context).iconTheme.color,
             size: 24,
           ),
           const SizedBox(width: 16),
@@ -335,15 +344,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   label,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
                     fontSize: 14,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   value,
                   style: const TextStyle(
-                    color: Colors.white,
                     fontSize: 16,
                   ),
                 ),

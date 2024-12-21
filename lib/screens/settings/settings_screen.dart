@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -9,7 +11,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool isDarkMode = true;
   bool allNotifications = true;
   bool medicationReminders = true;
   bool healthTracking = true;
@@ -18,22 +19,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF00695C),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Settings',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w400,
-          ),
+          style: Theme.of(context).textTheme.headlineSmall,
         ),
       ),
       body: ListView(
@@ -43,14 +42,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             [
               _buildSwitchTile(
                 icon: Icons.dark_mode,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Dark Mode',
                 subtitle: 'Dark theme enabled',
-                value: isDarkMode,
+                value: themeProvider.isDarkMode,
                 onChanged: (value) {
-                  setState(() {
-                    isDarkMode = value;
-                  });
+                  themeProvider.toggleTheme();
                 },
               ),
             ],
@@ -60,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             [
               _buildSwitchTile(
                 icon: Icons.notifications,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'All Notifications',
                 subtitle: 'Enable or disable all notifications',
                 value: allNotifications,
@@ -72,7 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildNavigationTile(
                 icon: Icons.bug_report,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Test Notifications',
                 subtitle: 'Try out different notification types',
                 onTap: () {
@@ -81,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSwitchTile(
                 icon: Icons.medication,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Medication Reminders',
                 subtitle: 'Daily schedules and refill alerts',
                 value: medicationReminders,
@@ -93,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSwitchTile(
                 icon: Icons.monitor_heart,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Health Tracking',
                 subtitle: 'Blood pressure, sugar, and other metrics',
                 value: healthTracking,
@@ -105,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSwitchTile(
                 icon: Icons.calendar_today,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Appointments',
                 subtitle: 'Medical visits and follow-ups',
                 value: appointments,
@@ -117,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSwitchTile(
                 icon: Icons.emergency,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Emergency Updates',
                 subtitle: 'Contact verification and updates',
                 value: emergencyUpdates,
@@ -134,7 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             [
               _buildNavigationTile(
                 icon: Icons.security,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Privacy Policy',
                 subtitle: '',
                 onTap: () {
@@ -143,7 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildNavigationTile(
                 icon: Icons.description,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Terms of Service',
                 subtitle: '',
                 onTap: () {
@@ -157,7 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             [
               _buildNavigationTile(
                 icon: Icons.person,
-                iconColor: const Color(0xFF80CBC4),
+                iconColor: Theme.of(context).colorScheme.primary,
                 title: 'Edit Profile',
                 subtitle: '',
                 onTap: () {
@@ -222,17 +219,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: const Color(0xFF00695C),
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'Print Report',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -251,8 +246,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
           child: Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF80CBC4),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 20,
               fontWeight: FontWeight.w500,
             ),
@@ -272,29 +267,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     return ListTile(
-      leading: Icon(icon, color: iconColor, size: 28),
+      leading: Icon(
+        icon,
+        color: Theme.of(context).colorScheme.primary,
+        size: 28
+      ),
       title: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
+        style: Theme.of(context).textTheme.titleMedium,
       ),
       subtitle: Text(
         subtitle,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.6),
-          fontSize: 14,
-        ),
+        style: Theme.of(context).textTheme.bodyMedium,
       ),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: const Color(0xFF80CBC4),
-        activeTrackColor: const Color(0xFF80CBC4).withOpacity(0.3),
-        inactiveThumbColor: Colors.grey,
-        inactiveTrackColor: Colors.grey.withOpacity(0.3),
+        activeColor: Theme.of(context).colorScheme.primary,
+        activeTrackColor: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        inactiveThumbColor: Theme.of(context).unselectedWidgetColor,
+        inactiveTrackColor: Theme.of(context).unselectedWidgetColor.withOpacity(0.3),
       ),
     );
   }
@@ -307,27 +299,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: iconColor, size: 28),
+      leading: Icon(
+        icon,
+        color: Theme.of(context).colorScheme.primary,
+        size: 28
+      ),
       title: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
+        style: Theme.of(context).textTheme.titleMedium,
       ),
-      subtitle: subtitle.isNotEmpty
-          ? Text(
-              subtitle,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 14,
-              ),
-            )
-          : null,
-      trailing: const Icon(
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      trailing: Icon(
         Icons.chevron_right,
-        color: Colors.white,
+        color: Theme.of(context).iconTheme.color,
       ),
       onTap: onTap,
     );
