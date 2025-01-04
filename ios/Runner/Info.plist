@@ -45,5 +45,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to save and share health reports.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>This app needs access to save and share health reports.</string>
 </dict>
 </plist>

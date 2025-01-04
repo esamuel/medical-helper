@@ -186,21 +186,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSection(
             'About',
             [
-              const ListTile(
+              ListTile(
                 leading: Icon(
-                  Icons.info,
-                  color: Color(0xFF80CBC4),
-                  size: 28,
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 title: Text(
                   'Version',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                subtitle: Text(
+                subtitle: const Text(
                   '1.0.0',
                   style: TextStyle(
                     color: Colors.white70,
@@ -209,28 +208,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextButton(
-              onPressed: () {
-                // Handle print report
-              },
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(
-                'Print Report',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary,
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: 16),
         ],

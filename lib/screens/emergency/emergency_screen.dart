@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EmergencyScreen extends StatelessWidget {
   const EmergencyScreen({Key? key}) : super(key: key);
@@ -25,7 +26,7 @@ class EmergencyScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
         title: const Text(
-          'Emergency Contacts',
+          'Emergency',
           style: TextStyle(
             color: Colors.white,
             fontSize: 24,
@@ -46,10 +47,10 @@ class EmergencyScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.error_outline,
                     size: 48,
-                    color: Colors.redAccent.shade200,
+                    color: Colors.red,
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -90,30 +91,41 @@ class EmergencyScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.contact_phone_outlined,
+                    Icons.emergency_outlined,
                     size: 64,
                     color: const Color(0xFF80CBC4).withOpacity(0.6),
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'No emergency contacts added',
+                    'Emergency Information',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () => _addContact(context),
-                    icon: const Icon(
-                      Icons.add,
-                      color: Color(0xFF80CBC4),
-                    ),
-                    label: const Text(
-                      'Add Contact',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Add important emergency information and contacts that can be quickly accessed when needed',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xFF80CBC4),
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 14,
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => _addContact(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00695C),
+                    ),
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text(
+                      'Add Emergency Contact',
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
                 ],
@@ -178,18 +190,16 @@ class EmergencyScreen extends StatelessWidget {
                           Icons.phone,
                           color: Color(0xFF80CBC4),
                         ),
-                        onPressed: () => _callContact(contact['phone']),
+                        onPressed: () =>
+                            _makePhoneCall(context, contact['phone']),
                       ),
                       IconButton(
-                        icon: Icon(
-                          Icons.delete_outline,
-                          color: Colors.redAccent.shade200,
+                        icon: const Icon(
+                          Icons.delete,
+                          color: Colors.red,
                         ),
-                        onPressed: () => _deleteContact(
-                          context,
-                          contacts[index].id,
-                          contact['name'],
-                        ),
+                        onPressed: () =>
+                            _deleteContact(context, contacts[index].id),
                       ),
                     ],
                   ),
@@ -207,52 +217,117 @@ class EmergencyScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _makePhoneCall(BuildContext context, String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
+    );
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not launch phone dialer'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _addContact(BuildContext context) {
-    // Navigate to add contact screen
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2A2A),
+        title: const Text(
+          'Add Emergency Contact',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: TextStyle(color: Color(0xFF80CBC4)),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF80CBC4), width: 2),
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Phone Number',
+                labelStyle: TextStyle(color: Color(0xFF80CBC4)),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF80CBC4), width: 2),
+                ),
+              ),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF80CBC4)),
+            ),
+          ),
+          FilledButton(
+            onPressed: () {
+              // TODO: Implement contact addition
+              Navigator.pop(context);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00695C),
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _callContact(String phoneNumber) {
-    // Implement phone call functionality
-  }
-
-  Future<void> _deleteContact(
-    BuildContext context,
-    String contactId,
-    String contactName,
-  ) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _deleteContact(BuildContext context, String contactId) async {
+    final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2A2A2A),
         title: const Text(
           'Delete Contact',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-          ),
+          style: TextStyle(color: Colors.white),
         ),
-        content: Text(
-          'Are you sure you want to delete $contactName from your emergency contacts?',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.87),
-            fontSize: 16,
-          ),
+        content: const Text(
+          'Are you sure you want to delete this contact?',
+          style: TextStyle(color: Colors.white),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text(
-              'CANCEL',
+              'Cancel',
               style: TextStyle(color: Color(0xFF80CBC4)),
             ),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'DELETE',
-              style: TextStyle(color: Colors.redAccent.shade200),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
             ),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -269,6 +344,7 @@ class EmergencyScreen extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Contact deleted'),
+              backgroundColor: Color(0xFF00695C),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -278,8 +354,8 @@ class EmergencyScreen extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error deleting contact: $e'),
-              behavior: SnackBarBehavior.floating,
               backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }

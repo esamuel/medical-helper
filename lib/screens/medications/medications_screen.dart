@@ -303,7 +303,7 @@ class MedicationsScreen extends StatelessWidget {
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('Medication deleted'),
               behavior: SnackBarBehavior.floating,
             ),

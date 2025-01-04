@@ -178,6 +178,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                       style: const TextStyle(color: Colors.white),
                       initialValue: _name,
                       textCapitalization: TextCapitalization.words,
+                      keyboardType: TextInputType.text,
+                      enableInteractiveSelection: true,
+                      autocorrect: true,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter medication name';
@@ -205,6 +208,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                       ),
                       style: const TextStyle(color: Colors.white),
                       initialValue: _dosage,
+                      keyboardType: TextInputType.text,
+                      enableInteractiveSelection: true,
+                      autocorrect: true,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter dosage';
@@ -274,6 +280,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                       style: const TextStyle(color: Colors.white),
                       initialValue: _instructions,
                       maxLines: 3,
+                      keyboardType: TextInputType.text,
+                      enableInteractiveSelection: true,
+                      autocorrect: true,
                       textCapitalization: TextCapitalization.sentences,
                       onSaved: (value) => _instructions = value ?? '',
                     ),

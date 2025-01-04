@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'dart:math';
+import 'package:intl/intl.dart';
+import '../../providers/theme_provider.dart';
 import '../settings/settings_screen.dart';
+import 'dart:math';
+import 'package:fl_chart/fl_chart.dart';
+import './health_report_screen.dart';
 
 enum BloodPressureCategory {
   normal,
@@ -98,40 +101,61 @@ enum BloodSugarCategory { low, normal, preDiabetes, diabetes, high }
 
 enum MealTime { fasting, beforeMeal, afterMeal, bedtime }
 
+enum BloodSugarUnit { mgdL, mmolL }
+
 class BloodSugarReading {
   final double value;
   final DateTime timestamp;
   final MealTime mealTime;
   final String notes;
+  final BloodSugarUnit unit;
 
   BloodSugarReading({
     required this.value,
     required this.timestamp,
     required this.mealTime,
+    required this.unit,
     this.notes = '',
   });
 
+  static double mgdLToMmolL(double mgdL) {
+    return mgdL * 0.0555;
+  }
+
+  static double mmolLToMgdL(double mmolL) {
+    return mmolL * 18.0182;
+  }
+
+  double get valueInMgdL {
+    return unit == BloodSugarUnit.mgdL ? value : mmolLToMgdL(value);
+  }
+
+  double get valueInMmolL {
+    return unit == BloodSugarUnit.mmolL ? value : mgdLToMmolL(value);
+  }
+
   BloodSugarCategory get category {
+    final mgdLValue = valueInMgdL;
     switch (mealTime) {
       case MealTime.fasting:
-        if (value < 70) return BloodSugarCategory.low;
-        if (value < 100) return BloodSugarCategory.normal;
-        if (value < 126) return BloodSugarCategory.preDiabetes;
+        if (mgdLValue < 70) return BloodSugarCategory.low;
+        if (mgdLValue < 100) return BloodSugarCategory.normal;
+        if (mgdLValue < 126) return BloodSugarCategory.preDiabetes;
         return BloodSugarCategory.diabetes;
       case MealTime.beforeMeal:
-        if (value < 70) return BloodSugarCategory.low;
-        if (value < 100) return BloodSugarCategory.normal;
-        if (value < 126) return BloodSugarCategory.preDiabetes;
+        if (mgdLValue < 70) return BloodSugarCategory.low;
+        if (mgdLValue < 100) return BloodSugarCategory.normal;
+        if (mgdLValue < 126) return BloodSugarCategory.preDiabetes;
         return BloodSugarCategory.diabetes;
       case MealTime.afterMeal:
-        if (value < 70) return BloodSugarCategory.low;
-        if (value < 140) return BloodSugarCategory.normal;
-        if (value < 200) return BloodSugarCategory.preDiabetes;
+        if (mgdLValue < 70) return BloodSugarCategory.low;
+        if (mgdLValue < 140) return BloodSugarCategory.normal;
+        if (mgdLValue < 200) return BloodSugarCategory.preDiabetes;
         return BloodSugarCategory.diabetes;
       case MealTime.bedtime:
-        if (value < 70) return BloodSugarCategory.low;
-        if (value < 120) return BloodSugarCategory.normal;
-        if (value < 140) return BloodSugarCategory.preDiabetes;
+        if (mgdLValue < 70) return BloodSugarCategory.low;
+        if (mgdLValue < 120) return BloodSugarCategory.normal;
+        if (mgdLValue < 140) return BloodSugarCategory.preDiabetes;
         return BloodSugarCategory.diabetes;
     }
   }
@@ -185,14 +209,31 @@ class BloodSugarReading {
       'timestamp': Timestamp.fromDate(timestamp),
       'mealTime': mealTime.index,
       'notes': notes,
+      'unit': unit.index,
     };
   }
 
   factory BloodSugarReading.fromMap(Map<String, dynamic> map) {
+    debugPrint('Creating BloodSugarReading from map: $map');
+    final timestamp = (map['timestamp'] as Timestamp).toDate();
+    final value = (map['value'] as num).toDouble();
+    final unit = map['unit'] != null
+        ? BloodSugarUnit.values[map['unit']]
+        : BloodSugarUnit.mgdL;
+    final mealTime = map['mealTime'] != null
+        ? MealTime.values[map['mealTime']]
+        : MealTime.beforeMeal;
+
+    debugPrint('Creating BloodSugarReading with data:');
+    debugPrint('Value: $value');
+    debugPrint('Unit: $unit');
+    debugPrint('MealTime: $mealTime');
+
     return BloodSugarReading(
-      value: (map['value'] ?? 0.0).toDouble(),
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
-      mealTime: MealTime.values[map['mealTime'] ?? 0],
+      value: value,
+      timestamp: timestamp,
+      mealTime: mealTime,
+      unit: unit,
       notes: map['notes'] ?? '',
     );
   }
@@ -202,29 +243,35 @@ enum BMICategory { underweight, normal, overweight, obese, extremelyObese }
 
 class WeightReading {
   final double weight;
-  final double height; // in meters
+  final double? height; // in meters
   final DateTime timestamp;
   final String notes;
 
   WeightReading({
     required this.weight,
-    required this.height,
+    this.height,
     required this.timestamp,
     this.notes = '',
   });
 
-  double get bmi => weight / (height * height);
+  double? get bmi => height != null ? weight / (height! * height!) : null;
 
-  BMICategory get category {
-    if (bmi < 18.5) return BMICategory.underweight;
-    if (bmi < 25) return BMICategory.normal;
-    if (bmi < 30) return BMICategory.overweight;
-    if (bmi < 35) return BMICategory.obese;
+  BMICategory? get category {
+    final currentBmi = bmi;
+    if (currentBmi == null) return null;
+
+    if (currentBmi < 18.5) return BMICategory.underweight;
+    if (currentBmi < 25) return BMICategory.normal;
+    if (currentBmi < 30) return BMICategory.overweight;
+    if (currentBmi < 35) return BMICategory.obese;
     return BMICategory.extremelyObese;
   }
 
-  Color get categoryColor {
-    switch (category) {
+  Color? get categoryColor {
+    final currentCategory = category;
+    if (currentCategory == null) return null;
+
+    switch (currentCategory) {
       case BMICategory.underweight:
         return const Color(0xFF64B5F6);
       case BMICategory.normal:
@@ -239,7 +286,10 @@ class WeightReading {
   }
 
   String get categoryText {
-    switch (category) {
+    final currentCategory = category;
+    if (currentCategory == null) return 'No BMI (height not provided)';
+
+    switch (currentCategory) {
       case BMICategory.underweight:
         return 'Underweight';
       case BMICategory.normal:
@@ -264,8 +314,8 @@ class WeightReading {
 
   factory WeightReading.fromMap(Map<String, dynamic> map) {
     return WeightReading(
-      weight: (map['weight'] ?? 0.0).toDouble(),
-      height: (map['height'] ?? 0.0).toDouble(),
+      weight: (map['weight'] as num).toDouble(),
+      height: map['height'] != null ? (map['height'] as num).toDouble() : null,
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       notes: map['notes'] ?? '',
     );
@@ -354,7 +404,7 @@ class HeartRateReading {
 
   factory HeartRateReading.fromMap(Map<String, dynamic> map) {
     return HeartRateReading(
-      value: (map['value'] ?? 0).toInt(),
+      value: (map['value'] as num).toInt(),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       activity: ActivityType.values[map['activity'] ?? 0],
       notes: map['notes'] ?? '',
@@ -383,79 +433,161 @@ class HealthMetric {
   });
 
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> valueMap;
-    if (value is BloodPressureReading) {
-      valueMap = (value as BloodPressureReading).toMap();
-    } else if (value is BloodSugarReading) {
-      valueMap = (value as BloodSugarReading).toMap();
-    } else if (value is WeightReading) {
-      valueMap = (value as WeightReading).toMap();
-    } else if (value is HeartRateReading) {
-      valueMap = (value as HeartRateReading).toMap();
-    } else {
-      valueMap = {'value': value};
+    debugPrint('Converting HealthMetric to map:');
+    debugPrint('Type: $type');
+    debugPrint('Value: $value');
+    debugPrint('Unit: $unit');
+
+    if (type == 'Blood Sugar') {
+      final bloodSugar = value as BloodSugarReading;
+      debugPrint('Converting BloodSugarReading:');
+      debugPrint('Value: ${bloodSugar.value}');
+      debugPrint('Unit: ${bloodSugar.unit}');
+      debugPrint('MealTime: ${bloodSugar.mealTime}');
+
+      return {
+        'id': id,
+        'userId': userId,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'type': type,
+        'value': bloodSugar.value,
+        'unit': bloodSugar.unit.index,
+        'mealTime': bloodSugar.mealTime.index,
+        'notes': notes,
+      };
+    } else if (type == 'Blood Pressure') {
+      final bp = value as BloodPressureReading;
+      return {
+        'id': id,
+        'userId': userId,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'type': type,
+        'systolic': bp.systolic,
+        'diastolic': bp.diastolic,
+        'pulse': bp.pulse,
+        'notes': notes,
+      };
+    } else if (type == 'Weight') {
+      final weight = value as WeightReading;
+      return {
+        'id': id,
+        'userId': userId,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'type': type,
+        'weight': weight.weight,
+        'height': weight.height,
+        'notes': notes,
+      };
+    } else if (type == 'Heart Rate') {
+      final heartRate = value as HeartRateReading;
+      return {
+        'id': id,
+        'userId': userId,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'type': type,
+        'value': heartRate.value,
+        'activity': heartRate.activity.index,
+        'notes': notes,
+      };
     }
 
     return {
       'id': id,
       'userId': userId,
       'timestamp': Timestamp.fromDate(timestamp),
-      ...valueMap,
-      'unit': unit,
       'type': type,
+      'value': value,
+      'unit': unit,
       'notes': notes,
     };
   }
 
   factory HealthMetric.fromMap(Map<String, dynamic> map) {
+    debugPrint('Converting map to HealthMetric:');
+    debugPrint('Map data: $map');
+
     final type = map['type'] as String;
-    final timestamp = (map['timestamp'] as Timestamp).toDate();
+    dynamic timestamp = map['timestamp'];
+    if (timestamp is int) {
+      timestamp = Timestamp.fromMillisecondsSinceEpoch(timestamp);
+    }
+    final dateTime = (timestamp as Timestamp).toDate();
     dynamic value;
 
-    if (type == 'Blood Pressure') {
+    if (type == 'Blood Sugar') {
+      debugPrint('Creating BloodSugarReading with data:');
+      debugPrint('Value: ${map['value']}');
+      debugPrint('Unit: ${map['unit']}');
+      debugPrint('MealTime: ${map['mealTime']}');
+
+      // Handle unit conversion
+      int unitIndex;
+      if (map['unit'] is String) {
+        unitIndex = map['unit'] == 'mg/dL' ? 0 : 1;
+      } else {
+        unitIndex = (map['unit'] as int?) ?? 0;
+      }
+
+      final mealTimeIndex = map['mealTime'] as int? ?? 0;
+      final sugarValue = (map['value'] as num).toDouble();
+
+      value = BloodSugarReading(
+        value: sugarValue,
+        unit: BloodSugarUnit.values[unitIndex],
+        mealTime: MealTime.values[mealTimeIndex],
+        timestamp: dateTime,
+        notes: map['notes'] as String? ?? '',
+      );
+
+      debugPrint('Created BloodSugarReading:');
+      debugPrint('Value: ${value.value}');
+      debugPrint('Unit: ${value.unit}');
+      debugPrint('MealTime: ${value.mealTime}');
+    } else if (type == 'Blood Pressure') {
       value = BloodPressureReading(
         systolic: map['systolic'] as int,
         diastolic: map['diastolic'] as int,
         pulse: map['pulse'] as int,
-        timestamp: timestamp,
-        notes: map['notes'] as String? ?? '',
-      );
-    } else if (type == 'Blood Sugar') {
-      value = BloodSugarReading(
-        value: (map['value'] as num).toDouble(),
-        timestamp: timestamp,
-        mealTime: map['mealTime'] != null
-            ? MealTime.values[map['mealTime'] as int]
-            : MealTime.beforeMeal,
+        timestamp: dateTime,
         notes: map['notes'] as String? ?? '',
       );
     } else if (type == 'Weight') {
       value = WeightReading(
         weight: (map['weight'] as num).toDouble(),
-        height: (map['height'] as num).toDouble(),
-        timestamp: timestamp,
+        height:
+            map['height'] != null ? (map['height'] as num).toDouble() : null,
+        timestamp: dateTime,
         notes: map['notes'] as String? ?? '',
       );
     } else if (type == 'Heart Rate') {
+      final activityIndex = map['activity'] as int? ?? 0;
       value = HeartRateReading(
-        value: map['value'] as int,
-        timestamp: timestamp,
-        activity: map['activity'] != null
-            ? ActivityType.values[map['activity'] as int]
-            : ActivityType.resting,
+        value: (map['value'] as num).toInt(),
+        activity: ActivityType.values[activityIndex],
+        timestamp: dateTime,
         notes: map['notes'] as String? ?? '',
       );
     } else {
       value = map['value'];
     }
 
+    // Convert unit string to proper format
+    String unit;
+    if (type == 'Blood Sugar') {
+      unit = (value as BloodSugarReading).unit == BloodSugarUnit.mgdL
+          ? 'mg/dL'
+          : 'mmol/L';
+    } else {
+      unit = map['unit'] as String? ?? '';
+    }
+
     return HealthMetric(
       id: map['id'] as String,
       userId: map['userId'] as String,
-      timestamp: timestamp,
-      value: value,
-      unit: map['unit'] as String,
+      timestamp: dateTime,
       type: type,
+      value: value,
+      unit: unit,
       notes: map['notes'] as String? ?? '',
     );
   }
@@ -468,60 +600,97 @@ class HealthDataScreen extends StatefulWidget {
   State<HealthDataScreen> createState() => _HealthDataScreenState();
 }
 
-class _HealthDataScreenState extends State<HealthDataScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  bool _isDarkMode = true;
+class _HealthDataScreenState extends State<HealthDataScreen>
+    with SingleTickerProviderStateMixin {
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+  Map<String, List<HealthMetric>> _healthData = {};
+  String _selectedMetric = '';
+  bool _isLoading = true;
+  double _lastHeight = 1.7; // Default height in meters
+  late TabController _tabController;
 
-  final Map<String, List<HealthMetric>> _healthData = {
-    'Blood Pressure': [],
-    'Heart Rate': [],
-    'Blood Sugar': [],
-    'Weight': [],
-    'Temperature': [],
-  };
-
+  // Controllers
   final _valueController = TextEditingController();
   final _systolicController = TextEditingController();
   final _diastolicController = TextEditingController();
   final _pulseController = TextEditingController();
   final _heightController = TextEditingController();
   final _notesController = TextEditingController();
-  String _selectedMetric = 'Blood Pressure';
+  final _heartRateController = TextEditingController();
+
+  // Selection states
   MealTime _selectedMealTime = MealTime.beforeMeal;
-  double _lastHeight = 1.7; // Default height in meters
-  bool _isLoading = true;
   ActivityType _selectedActivity = ActivityType.resting;
+  BloodSugarUnit _selectedBloodSugarUnit = BloodSugarUnit.mgdL;
 
-  final Map<String, String> _units = {
-    'Blood Pressure': 'mmHg',
-    'Heart Rate': 'bpm',
-    'Blood Sugar': 'mg/dL',
-    'Weight': 'kg',
-    'Temperature': '°C',
-  };
+  Future<void> _migrateBloodSugarReadings() async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
 
-  final TextEditingController _heartRateController = TextEditingController();
+      debugPrint('Starting blood sugar readings migration for user: $userId');
+
+      final snapshot = await _firestore
+          .collection('health_metrics')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'Blood Sugar')
+          .get();
+
+      debugPrint('Found ${snapshot.docs.length} blood sugar readings to check');
+
+      final batch = _firestore.batch();
+      var updatedCount = 0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        debugPrint('Checking document ${doc.id}:');
+        debugPrint('Data: $data');
+
+        if (!data.containsKey('unit')) {
+          debugPrint('No unit field found, updating to mg/dL');
+          batch.update(doc.reference, {
+            'unit': BloodSugarUnit.mgdL.index,
+          });
+          updatedCount++;
+        } else {
+          debugPrint('Unit field exists: ${data['unit']}');
+        }
+      }
+
+      if (updatedCount > 0) {
+        debugPrint('Committing batch update for $updatedCount documents');
+        await batch.commit();
+        debugPrint('Successfully migrated $updatedCount blood sugar readings');
+      } else {
+        debugPrint('No migration needed');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error migrating blood sugar readings: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _checkAuthState();
+    _tabController = TabController(length: 4, vsync: this);
     _loadHealthData();
-    _loadLastHeight();
-  }
+    _loadHeight();
 
-  void _checkAuthState() {
-    final user = _auth.currentUser;
-    debugPrint('Current auth state - User: ${user?.uid}');
-    debugPrint('Current auth state - Email: ${user?.email}');
-    debugPrint('Current auth state - Is Anonymous: ${user?.isAnonymous}');
-    debugPrint(
-        'Current auth state - Is Email Verified: ${user?.emailVerified}');
+    // Listen to tab changes and update _selectedMetric
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {
+          _selectedMetric = _healthData.keys.elementAt(_tabController.index);
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _valueController.dispose();
     _systolicController.dispose();
     _diastolicController.dispose();
@@ -542,7 +711,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     _heartRateController.clear();
   }
 
-  Future<void> _loadLastHeight() async {
+  Future<void> _loadHeight() async {
     try {
       final userId = _auth.currentUser?.uid;
       if (userId == null) return;
@@ -562,26 +731,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     }
   }
 
-  Future<void> _saveHeight(double height) async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .set({'height': height}, SetOptions(merge: true));
-
-      setState(() {
-        _lastHeight = height;
-      });
-    } catch (e) {
-      debugPrint('Error saving height: $e');
-    }
-  }
-
   Future<void> _loadHealthData() async {
     if (!mounted) return;
+    setState(() => _isLoading = true);
 
     try {
       final userId = _auth.currentUser?.uid;
@@ -590,123 +742,56 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         return;
       }
 
-      debugPrint('Loading health data for user: $userId');
-
-      // Clear existing data
-      setState(() {
-        for (var key in _healthData.keys) {
-          _healthData[key]?.clear();
-        }
-      });
-
-      // Query all health metrics for the user
-      final QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
+      final snapshot = await _firestore
           .collection('health_metrics')
           .where('userId', isEqualTo: userId)
           .orderBy('timestamp', descending: true)
           .get();
 
-      debugPrint('Found ${snapshot.docs.length} health metrics');
+      // Store current selected metric
+      final currentSelectedMetric = _selectedMetric;
+      final currentTabIndex = _tabController.index;
+
+      // Initialize with empty lists for all supported types
+      final newHealthData = {
+        'Blood Pressure': <HealthMetric>[],
+        'Blood Sugar': <HealthMetric>[],
+        'Weight': <HealthMetric>[],
+        'Heart Rate': <HealthMetric>[],
+      };
 
       for (var doc in snapshot.docs) {
         try {
-          debugPrint('Processing document: ${doc.id}');
-          debugPrint('Document data: ${doc.data()}');
-
-          final map = doc.data();
-          final type = map['type'] as String;
-          dynamic value;
-
-          // Parse timestamp
-          DateTime timestamp;
-          final timestampData = map['timestamp'];
-          if (timestampData is Timestamp) {
-            timestamp = timestampData.toDate();
-          } else if (timestampData is String) {
-            timestamp = DateTime.parse(timestampData);
-          } else if (timestampData is int) {
-            timestamp = DateTime.fromMillisecondsSinceEpoch(timestampData);
-          } else {
-            throw Exception('Invalid timestamp format');
+          final data = doc.data();
+          final metric = HealthMetric.fromMap({...data, 'id': doc.id});
+          if (newHealthData.containsKey(metric.type)) {
+            newHealthData[metric.type]!.add(metric);
           }
-
-          if (type == 'Blood Pressure') {
-            value = BloodPressureReading(
-              systolic: map['systolic'] as int,
-              diastolic: map['diastolic'] as int,
-              pulse: map['pulse'] as int,
-              timestamp: timestamp,
-              notes: map['notes'] as String? ?? '',
-            );
-          } else if (type == 'Blood Sugar') {
-            value = BloodSugarReading(
-              value: (map['value'] as num).toDouble(),
-              timestamp: timestamp,
-              mealTime: map['mealTime'] != null
-                  ? MealTime.values[map['mealTime'] as int]
-                  : MealTime.beforeMeal,
-              notes: map['notes'] as String? ?? '',
-            );
-          } else if (type == 'Weight') {
-            value = WeightReading(
-              weight: (map['weight'] as num).toDouble(),
-              height: (map['height'] as num).toDouble(),
-              timestamp: timestamp,
-              notes: map['notes'] as String? ?? '',
-            );
-          } else if (type == 'Heart Rate') {
-            value = HeartRateReading(
-              value: (map['value'] as num).toInt(),
-              timestamp: timestamp,
-              activity: map['activity'] != null
-                  ? ActivityType.values[map['activity'] as int]
-                  : ActivityType.resting,
-              notes: map['notes'] as String? ?? '',
-            );
-          } else {
-            value = map['value'];
-          }
-
-          if (mounted) {
-            setState(() {
-              _healthData[type]?.add(
-                HealthMetric(
-                  id: doc.id,
-                  userId: map['userId'] as String,
-                  timestamp: timestamp,
-                  value: value,
-                  unit: map['unit'] as String,
-                  type: type,
-                  notes: map['notes'] as String? ?? '',
-                ),
-              );
-            });
-          }
-
-          debugPrint(
-              'Added metric to category: $type with value: $value at $timestamp');
         } catch (e, stackTrace) {
           debugPrint('Error processing document ${doc.id}: $e');
           debugPrint('Stack trace: $stackTrace');
         }
       }
 
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e, stackTrace) {
+      if (mounted) {
+        setState(() {
+          _healthData = newHealthData;
+          _isLoading = false;
+          // Restore selected metric
+          _selectedMetric = currentSelectedMetric.isNotEmpty
+              ? currentSelectedMetric
+              : newHealthData.keys.first;
+          // Restore tab index
+          if (currentTabIndex >= 0) {
+            _tabController.index = currentTabIndex;
+          }
+        });
+      }
+    } catch (e) {
       debugPrint('Error loading health data: $e');
-      debugPrint('Stack trace: $stackTrace');
-
-      if (!mounted) return;
-
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading health data: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -762,33 +847,45 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       debugPrint('Document data: $data');
 
       await _firestore.collection('health_metrics').doc(docId).set(data);
+      debugPrint('Successfully saved health metric');
 
-      debugPrint('Successfully saved to Firestore');
-
-      if (!mounted) return;
-
-      setState(() {
-        _healthData[type]?.insert(0, metric);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$type data saved successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      await _loadHealthData();
+      debugPrint('Reloaded health data');
     } catch (e, stackTrace) {
-      debugPrint('Error saving health metric: $e');
+      debugPrint('Error adding health metric: $e');
       debugPrint('Stack trace: $stackTrace');
-
-      if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error saving health metric: $e'),
+          content: Text('Error saving health data: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  final Map<String, String> _units = {
+    'Blood Pressure': 'mmHg',
+    'Heart Rate': 'bpm',
+    'Blood Sugar': 'mg/dL',
+    'Weight': 'kg',
+    'Temperature': '°C',
+  };
+
+  Future<void> _saveHeight(double height) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .set({'height': height}, SetOptions(merge: true));
+
+      setState(() {
+        _lastHeight = height;
+      });
+    } catch (e) {
+      debugPrint('Error saving height: $e');
     }
   }
 
@@ -835,7 +932,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               children: [
                 TextField(
                   controller: _heartRateController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true, signed: true),
                   decoration: const InputDecoration(
                     labelText: 'Heart Rate (BPM)',
                     hintText: 'Enter heart rate in beats per minute',
@@ -1003,7 +1101,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             children: [
               TextField(
                 controller: _systolicController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 decoration: const InputDecoration(
                   labelText: 'Systolic (mmHg)',
                   hintText: 'Enter systolic pressure',
@@ -1013,7 +1112,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _diastolicController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 decoration: const InputDecoration(
                   labelText: 'Diastolic (mmHg)',
                   hintText: 'Enter diastolic pressure',
@@ -1023,7 +1123,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _pulseController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 decoration: const InputDecoration(
                   labelText: 'Pulse (bpm)',
                   hintText: 'Enter pulse rate',
@@ -1094,23 +1195,41 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 return;
               }
 
-              final reading = BloodPressureReading(
-                systolic: systolic,
-                diastolic: diastolic,
-                pulse: pulse,
-                timestamp: DateTime.now(),
-                notes: _notesController.text.trim(),
-              );
+              try {
+                debugPrint('Creating new blood pressure reading...');
+                final reading = BloodPressureReading(
+                  systolic: systolic,
+                  diastolic: diastolic,
+                  pulse: pulse,
+                  timestamp: DateTime.now(),
+                  notes: _notesController.text.trim(),
+                );
 
-              _addHealthMetric(
-                value: reading,
-                unit: 'mmHg',
-                type: 'Blood Pressure',
-                notes: _notesController.text.trim(),
-              );
+                debugPrint('Blood pressure reading created:');
+                debugPrint('Systolic: ${reading.systolic}');
+                debugPrint('Diastolic: ${reading.diastolic}');
+                debugPrint('Pulse: ${reading.pulse}');
 
-              Navigator.pop(context);
-              _clearControllers();
+                _addHealthMetric(
+                  value: reading,
+                  unit: 'mmHg',
+                  type: 'Blood Pressure',
+                  notes: _notesController.text.trim(),
+                );
+
+                Navigator.pop(context);
+                _clearControllers();
+              } catch (e, stackTrace) {
+                debugPrint('Error creating blood pressure reading: $e');
+                debugPrint('Stack trace: $stackTrace');
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error saving blood pressure: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             child: const Text('Save'),
           ),
@@ -1119,123 +1238,184 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
-  void _showBloodSugarInputDialog() {
+  Future<void> _showBloodSugarInputDialog() async {
     _valueController.clear();
     _notesController.clear();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Blood Sugar Reading'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _valueController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Blood Sugar (mg/dL)',
-                  hintText: 'Enter blood sugar level',
-                  border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add Blood Sugar Reading'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _valueController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: _selectedBloodSugarUnit == BloodSugarUnit.mgdL
+                        ? 'Blood Sugar (mg/dL)'
+                        : 'Blood Sugar (mmol/L)',
+                    hintText: _selectedBloodSugarUnit == BloodSugarUnit.mgdL
+                        ? 'Enter blood sugar value (normal range: 70-100 mg/dL)'
+                        : 'Enter blood sugar value (normal range: 3.9-5.6 mmol/L)',
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<MealTime>(
-                value: _selectedMealTime,
-                decoration: const InputDecoration(
-                  labelText: 'Meal Time',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Unit:',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          'mmol/L',
+                          style: TextStyle(
+                            color:
+                                _selectedBloodSugarUnit == BloodSugarUnit.mmolL
+                                    ? Theme.of(context).primaryColor
+                                    : Colors.grey,
+                          ),
+                        ),
+                        Switch(
+                          value: _selectedBloodSugarUnit == BloodSugarUnit.mgdL,
+                          onChanged: (bool value) {
+                            final newUnit = value
+                                ? BloodSugarUnit.mgdL
+                                : BloodSugarUnit.mmolL;
+                            if (_valueController.text.isNotEmpty) {
+                              final currentValue =
+                                  double.tryParse(_valueController.text);
+                              if (currentValue != null) {
+                                if (value) {
+                                  // Convert from mmol/L to mg/dL
+                                  _valueController.text =
+                                      BloodSugarReading.mmolLToMgdL(
+                                              currentValue)
+                                          .toStringAsFixed(0);
+                                } else {
+                                  // Convert from mg/dL to mmol/L
+                                  _valueController.text =
+                                      BloodSugarReading.mgdLToMmolL(
+                                              currentValue)
+                                          .toStringAsFixed(1);
+                                }
+                              }
+                            }
+                            setState(() {
+                              _selectedBloodSugarUnit = newUnit;
+                            });
+                          },
+                        ),
+                        Text(
+                          'mg/dL',
+                          style: TextStyle(
+                            color:
+                                _selectedBloodSugarUnit == BloodSugarUnit.mgdL
+                                    ? Theme.of(context).primaryColor
+                                    : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                items: MealTime.values.map((mealTime) {
-                  return DropdownMenuItem(
-                    value: mealTime,
-                    child: Text(mealTime.toString().split('.').last),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    if (value != null) {
-                      _selectedMealTime = value;
+                const SizedBox(height: 16),
+                DropdownButtonFormField<MealTime>(
+                  value: _selectedMealTime,
+                  decoration: const InputDecoration(
+                    labelText: 'Meal Time',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: MealTime.values.map((mealTime) {
+                    return DropdownMenuItem(
+                      value: mealTime,
+                      child: Text(mealTime.toString().split('.').last),
+                    );
+                  }).toList(),
+                  onChanged: (MealTime? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedMealTime = newValue;
+                      });
                     }
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _notesController,
-                decoration: const InputDecoration(
-                  labelText: 'Notes (Optional)',
-                  hintText: 'Add any additional notes',
-                  border: OutlineInputBorder(),
+                  },
                 ),
-                maxLines: 2,
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (Optional)',
+                    hintText: 'Add any additional notes',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearControllers();
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (_valueController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a blood sugar value'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                final value = double.tryParse(_valueController.text);
+                if (value == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a valid number'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                final reading = BloodSugarReading(
+                  value: value,
+                  timestamp: DateTime.now(),
+                  mealTime: _selectedMealTime,
+                  unit: _selectedBloodSugarUnit,
+                  notes: _notesController.text.trim(),
+                );
+
+                _addHealthMetric(
+                  value: reading,
+                  unit: _selectedBloodSugarUnit == BloodSugarUnit.mgdL
+                      ? 'mg/dL'
+                      : 'mmol/L',
+                  type: 'Blood Sugar',
+                  notes: _notesController.text.trim(),
+                );
+
+                Navigator.pop(context);
+                _clearControllers();
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearControllers();
-            },
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (_valueController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a blood sugar value'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              final value = double.tryParse(_valueController.text);
-              if (value == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a valid number'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              if (value < 20 || value > 600) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                        'Please enter a realistic blood sugar value (20-600 mg/dL)'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              final reading = BloodSugarReading(
-                value: value,
-                timestamp: DateTime.now(),
-                mealTime: _selectedMealTime,
-                notes: _notesController.text.trim(),
-              );
-
-              _addHealthMetric(
-                value: reading,
-                unit: 'mg/dL',
-                type: 'Blood Sugar',
-                notes: _notesController.text.trim(),
-              );
-
-              Navigator.pop(context);
-              _clearControllers();
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -1256,7 +1436,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             children: [
               TextField(
                 controller: _valueController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 decoration: const InputDecoration(
                   labelText: 'Weight (kg)',
                   hintText: 'Enter your weight',
@@ -1266,7 +1447,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _heightController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 decoration: const InputDecoration(
                   labelText: 'Height (m)',
                   hintText: 'Enter your height',
@@ -1358,6 +1540,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(
@@ -1369,35 +1553,40 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return DefaultTabController(
       length: _healthData.length,
       child: Scaffold(
-        backgroundColor: const Color(0xFF00695C), // Dark teal background
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
           title: const Text(
-            'Medical Helper',
+            'Health Data',
             style: TextStyle(
-              color: Colors.white,
               fontSize: 24,
               fontWeight: FontWeight.w400,
             ),
           ),
-          backgroundColor: const Color(0xFF00695C), // Dark teal background
           elevation: 0,
           actions: [
             IconButton(
-              icon: const Icon(Icons.print, color: Colors.white),
+              icon: Icon(
+                themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
               onPressed: () {
-                // Add print functionality
+                themeProvider.toggleTheme();
               },
             ),
             IconButton(
-              icon: const Icon(Icons.dark_mode, color: Colors.white),
+              icon: const Icon(Icons.summarize),
               onPressed: () {
-                setState(() {
-                  _isDarkMode = !_isDarkMode;
-                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HealthReportScreen(),
+                  ),
+                );
               },
             ),
             IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white),
+              icon: const Icon(Icons.settings),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -1409,175 +1598,96 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             ),
           ],
           bottom: TabBar(
+            controller: _tabController,
             isScrollable: true,
-            indicatorColor: Colors.white,
-            tabs: _healthData.keys.map((String metric) {
-              return Tab(
-                child: Text(
-                  metric,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
-                ),
-              );
+            tabs: _healthData.keys.map((metric) {
+              return Tab(text: metric);
             }).toList(),
-            onTap: (index) {
-              setState(() {
-                _selectedMetric = _healthData.keys.elementAt(index);
-              });
-            },
           ),
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A1A1A), // Dark background for the content
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-          ),
-          child: TabBarView(
-            children: _healthData.entries.map((entry) {
-              final metrics = entry.value;
-              return metrics.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.show_chart,
-                            size: 64,
-                            color: Colors.white.withOpacity(0.6),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No ${entry.key} data yet',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap the + button to add data',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: _healthData.entries.map((entry) {
+            final metrics = entry.value;
+            return metrics.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No data available',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
                       ),
-                    )
-                  : Column(
-                      children: [
-                        if (entry.key == 'Blood Pressure')
-                          _buildBloodPressureGraph()
-                        else if (entry.key == 'Blood Sugar')
-                          _buildBloodSugarGraph()
-                        else if (entry.key == 'Weight')
-                          _buildWeightGraph()
-                        else if (entry.key == 'Heart Rate')
-                          _buildHeartRateGraph(),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: metrics.length,
-                            itemBuilder: (context, index) {
-                              final metric = metrics[index];
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                color: const Color(
-                                    0xFF2A2A2A), // Dark card background
-                                child: ListTile(
-                                  title: metric.type == 'Blood Pressure'
-                                      ? _buildBloodPressureTitle(
-                                          metric.value as BloodPressureReading)
-                                      : metric.type == 'Blood Sugar'
-                                          ? _buildBloodSugarTitle(
-                                              metric.value as BloodSugarReading)
-                                          : metric.type == 'Weight'
-                                              ? _buildWeightTitle(
-                                                  metric.value as WeightReading)
-                                              : metric.type == 'Heart Rate'
-                                                  ? _buildHeartRateTitle(
-                                                      metric.value
-                                                          as HeartRateReading)
-                                                  : Text(
-                                                      '${metric.value} ${metric.unit}',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                  subtitle: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        DateFormat('MMM d, y - h:mm a')
-                                            .format(metric.timestamp),
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.6),
-                                        ),
-                                      ),
-                                      if (metric.notes.isNotEmpty)
-                                        Text(
-                                          'Notes: ${metric.notes}',
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withOpacity(0.6),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () =>
-                                        _deleteHealthMetric(metric.id, index),
-                                  ),
-                                ),
-                              );
-                            },
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: metrics.length + 1, // Add 1 for the chart
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // Show appropriate chart based on metric type
+                        if (entry.key == 'Blood Sugar') {
+                          return _buildBloodSugarGraph();
+                        } else if (entry.key == 'Blood Pressure') {
+                          return _buildBloodPressureGraph();
+                        } else if (entry.key == 'Weight') {
+                          return _buildWeightGraph();
+                        } else if (entry.key == 'Heart Rate') {
+                          return _buildHeartRateGraph();
+                        }
+                        return const SizedBox
+                            .shrink(); // No chart for other metrics
+                      }
+
+                      final medication = metrics[index - 1];
+                      return Dismissible(
+                        key: Key(medication.id),
+                        background: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20.0),
+                          child: const Icon(
+                            Icons.delete,
+                            color: Colors.white,
                           ),
                         ),
-                      ],
-                    );
-            }).toList(),
-          ),
+                        direction: DismissDirection.endToStart,
+                        confirmDismiss: (direction) async {
+                          return await showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                title: const Text("Confirm"),
+                                content: const Text(
+                                    "Are you sure you want to delete this item?"),
+                                actions: <Widget>[
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: const Text("CANCEL"),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    child: const Text("DELETE"),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                        onDismissed: (direction) {
+                          _deleteHealthMetric(medication.id, index - 1);
+                        },
+                        child: _buildHealthMetricCard(medication),
+                      );
+                    },
+                  );
+          }).toList(),
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: _addHealthData,
           backgroundColor: const Color(0xFF00695C),
           child: const Icon(Icons.add, color: Colors.white),
-        ),
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: const Color(0xFF1A1A1A),
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white.withOpacity(0.6),
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.monitor_heart),
-              label: 'Health Data',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.medication),
-              label: 'Medications',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.emergency),
-              label: 'Emergency',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
         ),
       ),
     );
@@ -1625,131 +1735,121 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
-  Widget _buildBloodPressureGraph() {
-    if (_selectedMetric != 'Blood Pressure' ||
-        _healthData['Blood Pressure']?.isEmpty == true) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildBloodSugarTitle(BloodSugarReading reading) {
+    // Convert the value to both units
+    double mgdLValue = reading.unit == BloodSugarUnit.mgdL
+        ? reading.value
+        : BloodSugarReading.mmolLToMgdL(reading.value);
+    double mmolLValue = reading.unit == BloodSugarUnit.mmolL
+        ? reading.value
+        : BloodSugarReading.mgdLToMmolL(reading.value);
 
-    final readings = _healthData['Blood Pressure']!
-        .map((metric) => metric.value as BloodPressureReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
-
-    if (readings.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Blood Sugar: ${mgdLValue.toStringAsFixed(0)} mg/dL (${mmolLValue.toStringAsFixed(1)} mmol/L)',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
           children: [
-            const Text(
-              'Blood Pressure Trends',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: reading.categoryColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: reading.categoryColor),
               ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                LineChartData(
-                  gridData: const FlGridData(show: true),
-                  titlesData: FlTitlesData(
-                    leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        interval: 20,
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        interval: 1,
-                        getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 &&
-                              value.toInt() < readings.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                DateFormat('MM/dd')
-                                    .format(readings[value.toInt()].timestamp),
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                            );
-                          }
-                          return const Text('');
-                        },
-                      ),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  borderData: FlBorderData(show: true),
-                  lineBarsData: [
-                    // Systolic line
-                    LineChartBarData(
-                      spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(),
-                            readings[index].systolic.toDouble());
-                      }),
-                      isCurved: true,
-                      color: Colors.red,
-                      dotData: const FlDotData(show: true),
-                      belowBarData: BarAreaData(show: false),
-                    ),
-                    // Diastolic line
-                    LineChartBarData(
-                      spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(),
-                            readings[index].diastolic.toDouble());
-                      }),
-                      isCurved: true,
-                      color: Colors.blue,
-                      dotData: const FlDotData(show: true),
-                      belowBarData: BarAreaData(show: false),
-                    ),
-                  ],
-                  minY: 40,
-                  maxY: 200,
+              child: Text(
+                reading.categoryText,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: reading.categoryColor,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _LegendItem(color: Colors.red, label: 'Systolic'),
-                SizedBox(width: 16),
-                _LegendItem(color: Colors.blue, label: 'Diastolic'),
-              ],
+            const SizedBox(width: 8),
+            Text(
+              reading.mealTimeText,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildBloodSugarTitle(BloodSugarReading reading) {
+  Widget _buildWeightTitle(WeightReading reading) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Text(
-              '${reading.value} mg/dL',
+              'Weight: ${reading.weight.toStringAsFixed(1)} kg',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (reading.height != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: reading.categoryColor?.withOpacity(0.2) ??
+                      Colors.grey.withOpacity(0.2),
+                  border: Border.all(
+                    color: reading.categoryColor ?? Colors.grey,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  reading.categoryText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: reading.categoryColor ?? Colors.grey,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        if (reading.height != null)
+          Text(
+            'Height: ${reading.height?.toStringAsFixed(2)} m',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+        if (reading.height != null)
+          Text(
+            'BMI: ${reading.bmi?.toStringAsFixed(1)}',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeartRateTitle(HeartRateReading reading) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '${reading.value} bpm',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
               ),
@@ -1774,7 +1874,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           ],
         ),
         Text(
-          reading.mealTimeText,
+          'Activity: ${reading.activityText}',
           style: const TextStyle(
             fontSize: 14,
             color: Colors.grey,
@@ -1785,168 +1885,135 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Widget _buildBloodSugarGraph() {
-    if (_selectedMetric != 'Blood Sugar' ||
-        _healthData['Blood Sugar']?.isEmpty == true) {
-      return const SizedBox.shrink();
-    }
-
-    final readings = _healthData['Blood Sugar']!
+    final bloodSugarReadings = _healthData['Blood Sugar']!
         .map((metric) => metric.value as BloodSugarReading)
-        .toList()
-        .reversed
-        .toList(); // Show oldest to newest
+        .toList();
 
-    if (readings.isEmpty) {
+    if (bloodSugarReadings.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Blood Sugar Trends',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+    // Calculate min and max for better graph scaling
+    final values = bloodSugarReadings.map((r) => r.valueInMgdL).toList();
+    final minY = (values.reduce(min) - 10.0).clamp(0.0, double.infinity);
+    final maxY = (values.reduce(max) + 10.0).clamp(0.0, double.infinity);
+
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final lineColor =
+        isDarkMode ? Colors.white : Theme.of(context).primaryColor;
+    final gridColor = isDarkMode ? Colors.white24 : Colors.black12;
+    final textColor = isDarkMode ? Colors.white70 : Colors.grey;
+
+    return Container(
+      height: 200,
+      padding: const EdgeInsets.all(16),
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: true,
+            getDrawingHorizontalLine: (value) {
+              return FlLine(
+                color: gridColor,
+                strokeWidth: 1,
+              );
+            },
+            getDrawingVerticalLine: (value) {
+              return FlLine(
+                color: gridColor,
+                strokeWidth: 1,
+              );
+            },
+          ),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: 20,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    value.toInt().toString(),
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 12,
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                LineChartData(
-                  gridData: const FlGridData(show: true),
-                  titlesData: FlTitlesData(
-                    leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        interval: 50,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: 1,
+                getTitlesWidget: (value, meta) {
+                  if (value.toInt() >= 0 &&
+                      value.toInt() < bloodSugarReadings.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        DateFormat('MM/dd').format(
+                            bloodSugarReadings[value.toInt()].timestamp),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: textColor,
+                        ),
                       ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        interval: 1,
-                        getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= 0 &&
-                              value.toInt() < readings.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                DateFormat('MM/dd')
-                                    .format(readings[value.toInt()].timestamp),
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                            );
-                          }
-                          return const Text('');
-                        },
-                      ),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  borderData: FlBorderData(show: true),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: List.generate(readings.length, (index) {
-                        return FlSpot(index.toDouble(), readings[index].value);
-                      }),
-                      isCurved: true,
-                      color: Colors.blue,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) {
-                          return FlDotCirclePainter(
-                            radius: 4,
-                            color: readings[index].categoryColor,
-                            strokeWidth: 1,
-                            strokeColor: Colors.white,
-                          );
-                        },
-                      ),
-                      belowBarData: BarAreaData(show: false),
-                    ),
-                  ],
-                  minY: 40,
-                  maxY: 300,
-                ),
+                    );
+                  }
+                  return const Text('');
+                },
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: MealTime.values.map((time) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    time.toString().split('.').last,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          minY: minY,
+          maxY: maxY,
+          borderData: FlBorderData(
+            show: true,
+            border: Border.all(
+              color: gridColor,
+              width: 1,
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: List.generate(bloodSugarReadings.length, (index) {
+                return FlSpot(
+                  index.toDouble(),
+                  bloodSugarReadings[index].valueInMgdL,
                 );
-              }).toList(),
+              }),
+              isCurved: true,
+              curveSmoothness: 0.3,
+              preventCurveOverShooting: true,
+              color: lineColor,
+              barWidth: 3,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) {
+                  return FlDotCirclePainter(
+                    radius: 5,
+                    color: bloodSugarReadings[index].categoryColor,
+                    strokeWidth: 2,
+                    strokeColor: isDarkMode ? Colors.white : Colors.white,
+                  );
+                },
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: lineColor.withOpacity(0.1),
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildWeightTitle(WeightReading reading) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '${reading.weight.toStringAsFixed(1)} kg',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: reading.categoryColor.withOpacity(0.2),
-                border: Border.all(color: reading.categoryColor),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'BMI: ${reading.bmi.toStringAsFixed(1)} - ${reading.categoryText}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: reading.categoryColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        Text(
-          'Height: ${reading.height.toStringAsFixed(2)} m',
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
-      ],
     );
   }
 
@@ -2051,7 +2118,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         getDotPainter: (spot, percent, barData, index) {
                           return FlDotCirclePainter(
                             radius: 4,
-                            color: readings[index].categoryColor,
+                            color: readings[index].categoryColor ?? Colors.grey,
                             strokeWidth: 1,
                             strokeColor: Colors.white,
                           );
@@ -2093,7 +2160,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: reading.categoryColor.withOpacity(0.2),
+        color: reading.categoryColor?.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -2103,48 +2170,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           color: reading.categoryColor,
         ),
       ),
-    );
-  }
-
-  Widget _buildHeartRateTitle(HeartRateReading reading) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '${reading.value} bpm',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: reading.categoryColor.withOpacity(0.2),
-                border: Border.all(color: reading.categoryColor),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                reading.categoryText,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: reading.categoryColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        Text(
-          'Activity: ${reading.activityText}',
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
-      ],
     );
   }
 
@@ -2335,6 +2360,1153 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       ),
     );
   }
+
+  Widget _buildBloodSugarReadingCard(BloodSugarReading reading,
+      {String? metricId}) {
+    return Card(
+      child: ListTile(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat('MMM d, y - h:mm a').format(reading.timestamp),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _buildBloodSugarTitle(reading),
+          ],
+        ),
+        subtitle: reading.notes.isNotEmpty
+            ? Text(
+                'Notes: ${reading.notes}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: () {
+                if (metricId != null) {
+                  _editHealthMetric(HealthMetric(
+                    id: metricId,
+                    userId: _auth.currentUser!.uid,
+                    timestamp: reading.timestamp,
+                    value: reading,
+                    unit: reading.unit == BloodSugarUnit.mgdL
+                        ? 'mg/dL'
+                        : 'mmol/L',
+                    type: 'Blood Sugar',
+                    notes: reading.notes,
+                  ));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                if (metricId != null) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Confirm"),
+                        content: const Text(
+                            "Are you sure you want to delete this reading?"),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("CANCEL"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("DELETE"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteHealthMetric(
+                        metricId,
+                        _healthData['Blood Sugar']!
+                            .indexWhere((m) => m.id == metricId));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBloodPressureReadingCard(BloodPressureReading reading,
+      {String? metricId}) {
+    return Card(
+      child: ListTile(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat('MMM d, y - h:mm a').format(reading.timestamp),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _buildBloodPressureTitle(reading),
+          ],
+        ),
+        subtitle: reading.notes.isNotEmpty
+            ? Text(
+                'Notes: ${reading.notes}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: () {
+                if (metricId != null) {
+                  _editHealthMetric(HealthMetric(
+                    id: metricId,
+                    userId: _auth.currentUser!.uid,
+                    timestamp: reading.timestamp,
+                    value: reading,
+                    unit: 'mmHg',
+                    type: 'Blood Pressure',
+                    notes: reading.notes,
+                  ));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                if (metricId != null) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Confirm"),
+                        content: const Text(
+                            "Are you sure you want to delete this reading?"),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("CANCEL"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("DELETE"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteHealthMetric(
+                        metricId,
+                        _healthData['Blood Pressure']!
+                            .indexWhere((m) => m.id == metricId));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeightReadingCard(WeightReading reading, {String? metricId}) {
+    return Card(
+      child: ListTile(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat('MMM d, y - h:mm a').format(reading.timestamp),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _buildWeightTitle(reading),
+          ],
+        ),
+        subtitle: reading.notes.isNotEmpty
+            ? Text(
+                'Notes: ${reading.notes}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: () {
+                if (metricId != null) {
+                  _editHealthMetric(HealthMetric(
+                    id: metricId,
+                    userId: _auth.currentUser!.uid,
+                    timestamp: reading.timestamp,
+                    value: reading,
+                    unit: 'kg',
+                    type: 'Weight',
+                    notes: reading.notes,
+                  ));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                if (metricId != null) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Confirm"),
+                        content: const Text(
+                            "Are you sure you want to delete this reading?"),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("CANCEL"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("DELETE"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteHealthMetric(
+                        metricId,
+                        _healthData['Weight']!
+                            .indexWhere((m) => m.id == metricId));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeartRateReadingCard(HeartRateReading reading,
+      {String? metricId}) {
+    return Card(
+      child: ListTile(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat('MMM d, y - h:mm a').format(reading.timestamp),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _buildHeartRateTitle(reading),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Activity: ${reading.activity.toString().split('.').last}',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+            if (reading.notes.isNotEmpty)
+              Text(
+                'Notes: ${reading.notes}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: () {
+                if (metricId != null) {
+                  _editHealthMetric(HealthMetric(
+                    id: metricId,
+                    userId: _auth.currentUser!.uid,
+                    timestamp: reading.timestamp,
+                    value: reading,
+                    unit: 'bpm',
+                    type: 'Heart Rate',
+                    notes: reading.notes,
+                  ));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                if (metricId != null) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Confirm"),
+                        content: const Text(
+                            "Are you sure you want to delete this reading?"),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("CANCEL"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("DELETE"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteHealthMetric(
+                        metricId,
+                        _healthData['Heart Rate']!
+                            .indexWhere((m) => m.id == metricId));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthMetricCard(HealthMetric metric) {
+    if (metric.value is BloodSugarReading) {
+      return _buildBloodSugarReadingCard(metric.value as BloodSugarReading,
+          metricId: metric.id);
+    } else if (metric.value is BloodPressureReading) {
+      return _buildBloodPressureReadingCard(
+          metric.value as BloodPressureReading,
+          metricId: metric.id);
+    } else if (metric.value is WeightReading) {
+      return _buildWeightReadingCard(metric.value as WeightReading,
+          metricId: metric.id);
+    } else if (metric.value is HeartRateReading) {
+      return _buildHeartRateReadingCard(metric.value as HeartRateReading,
+          metricId: metric.id);
+    } else {
+      return Card(
+        child: ListTile(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('MMM d, y - h:mm a').format(metric.timestamp),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(metric.type),
+            ],
+          ),
+          subtitle: Text(metric.value.toString()),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: () {
+                  _editHealthMetric(metric);
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Confirm"),
+                        content: const Text(
+                            "Are you sure you want to delete this reading?"),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("CANCEL"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("DELETE"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteHealthMetric(
+                        metric.id,
+                        _healthData[metric.type]!
+                            .indexWhere((m) => m.id == metric.id));
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildCategoryIndicator(List<HealthMetric> readings, int index) {
+    if (readings[index].value is! BloodSugarReading &&
+        readings[index].value is! WeightReading) {
+      return const SizedBox.shrink();
+    }
+
+    Color indicatorColor = Colors.grey;
+    String categoryText = '';
+
+    if (readings[index].value is BloodSugarReading) {
+      final reading = readings[index].value as BloodSugarReading;
+      indicatorColor = reading.categoryColor;
+      categoryText = reading.categoryText;
+    } else if (readings[index].value is WeightReading) {
+      final reading = readings[index].value as WeightReading;
+      indicatorColor = reading.categoryColor ?? Colors.grey;
+      categoryText = reading.categoryText;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: indicatorColor.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        categoryText,
+        style: TextStyle(
+          fontSize: 12,
+          color: indicatorColor,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBloodPressureGraph() {
+    final bloodPressureReadings = _healthData['Blood Pressure']!
+        .map((metric) => metric.value as BloodPressureReading)
+        .toList();
+
+    if (bloodPressureReadings.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Calculate min and max for better graph scaling
+    final systolicReadings =
+        bloodPressureReadings.map((r) => r.systolic.toDouble()).toList();
+    final diastolicReadings =
+        bloodPressureReadings.map((r) => r.diastolic.toDouble()).toList();
+    final minY =
+        (diastolicReadings.reduce(min) - 10.0).clamp(0.0, double.infinity);
+    final maxY =
+        (systolicReadings.reduce(max) + 10.0).clamp(0.0, double.infinity);
+
+    return Container(
+      height: 200,
+      padding: const EdgeInsets.all(16),
+      child: LineChart(
+        LineChartData(
+          gridData: const FlGridData(show: true),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: 20,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    value.toInt().toString(),
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  );
+                },
+              ),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: 1,
+                getTitlesWidget: (value, meta) {
+                  if (value.toInt() >= 0 &&
+                      value.toInt() < bloodPressureReadings.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        DateFormat('MM/dd').format(
+                            bloodPressureReadings[value.toInt()].timestamp),
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    );
+                  }
+                  return const Text('');
+                },
+              ),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          minY: minY,
+          maxY: maxY,
+          borderData: FlBorderData(show: true),
+          lineBarsData: [
+            // Systolic line
+            LineChartBarData(
+              spots: List.generate(bloodPressureReadings.length, (index) {
+                return FlSpot(
+                  index.toDouble(),
+                  bloodPressureReadings[index].systolic.toDouble(),
+                );
+              }),
+              isCurved: true,
+              color: Colors.red,
+              barWidth: 2,
+              dotData: const FlDotData(show: true),
+              belowBarData: BarAreaData(show: false),
+            ),
+            // Diastolic line
+            LineChartBarData(
+              spots: List.generate(bloodPressureReadings.length, (index) {
+                return FlSpot(
+                  index.toDouble(),
+                  bloodPressureReadings[index].diastolic.toDouble(),
+                );
+              }),
+              isCurved: true,
+              color: Colors.blue,
+              barWidth: 2,
+              dotData: const FlDotData(show: true),
+              belowBarData: BarAreaData(show: false),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editHealthMetric(HealthMetric metric) {
+    if (metric.value is BloodSugarReading) {
+      _editBloodSugarReading(metric);
+    } else if (metric.value is BloodPressureReading) {
+      _editBloodPressureReading(metric);
+    } else if (metric.value is WeightReading) {
+      _editWeightReading(metric);
+    } else if (metric.value is HeartRateReading) {
+      _editHeartRateReading(metric);
+    }
+  }
+
+  void _editBloodSugarReading(HealthMetric metric) {
+    final reading = metric.value as BloodSugarReading;
+    _valueController.text = reading.value.toString();
+    _notesController.text = reading.notes;
+    _selectedMealTime = reading.mealTime;
+    _selectedBloodSugarUnit = reading.unit;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Blood Sugar Reading'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _valueController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: _selectedBloodSugarUnit == BloodSugarUnit.mgdL
+                      ? 'Blood Sugar (mg/dL)'
+                      : 'Blood Sugar (mmol/L)',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<BloodSugarUnit>(
+                value: _selectedBloodSugarUnit,
+                decoration: const InputDecoration(
+                  labelText: 'Unit',
+                  border: OutlineInputBorder(),
+                ),
+                items: BloodSugarUnit.values.map((unit) {
+                  return DropdownMenuItem(
+                    value: unit,
+                    child:
+                        Text(unit == BloodSugarUnit.mgdL ? 'mg/dL' : 'mmol/L'),
+                  );
+                }).toList(),
+                onChanged: (BloodSugarUnit? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedBloodSugarUnit = newValue;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<MealTime>(
+                value: _selectedMealTime,
+                decoration: const InputDecoration(
+                  labelText: 'Meal Time',
+                  border: OutlineInputBorder(),
+                ),
+                items: MealTime.values.map((mealTime) {
+                  return DropdownMenuItem(
+                    value: mealTime,
+                    child: Text(mealTime.toString().split('.').last),
+                  );
+                }).toList(),
+                onChanged: (MealTime? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedMealTime = newValue;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _clearControllers();
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (_valueController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a value'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              final value = double.tryParse(_valueController.text);
+              if (value == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid number'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final updatedReading = BloodSugarReading(
+                  value: value,
+                  timestamp: reading.timestamp,
+                  mealTime: _selectedMealTime,
+                  unit: _selectedBloodSugarUnit,
+                  notes: _notesController.text.trim(),
+                );
+
+                await _firestore
+                    .collection('health_metrics')
+                    .doc(metric.id)
+                    .update({
+                  'value': value,
+                  'mealTime': _selectedMealTime.index,
+                  'unit': _selectedBloodSugarUnit.index,
+                  'notes': _notesController.text.trim(),
+                });
+
+                await _loadHealthData();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _clearControllers();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Blood sugar reading updated successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error updating blood sugar reading: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editBloodPressureReading(HealthMetric metric) {
+    final reading = metric.value as BloodPressureReading;
+    _systolicController.text = reading.systolic.toString();
+    _diastolicController.text = reading.diastolic.toString();
+    _pulseController.text = reading.pulse.toString();
+    _notesController.text = reading.notes;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Blood Pressure Reading'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _systolicController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Systolic (mmHg)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _diastolicController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Diastolic (mmHg)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _pulseController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Pulse (bpm)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _clearControllers();
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (_systolicController.text.isEmpty ||
+                  _diastolicController.text.isEmpty ||
+                  _pulseController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in all required fields'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              final systolic = int.tryParse(_systolicController.text);
+              final diastolic = int.tryParse(_diastolicController.text);
+              final pulse = int.tryParse(_pulseController.text);
+
+              if (systolic == null || diastolic == null || pulse == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid numbers'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final updatedReading = BloodPressureReading(
+                  systolic: systolic,
+                  diastolic: diastolic,
+                  pulse: pulse,
+                  timestamp: reading.timestamp,
+                  notes: _notesController.text.trim(),
+                );
+
+                await _firestore
+                    .collection('health_metrics')
+                    .doc(metric.id)
+                    .update({
+                  'systolic': systolic,
+                  'diastolic': diastolic,
+                  'pulse': pulse,
+                  'notes': _notesController.text.trim(),
+                });
+
+                await _loadHealthData();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _clearControllers();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Blood pressure reading updated successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error updating blood pressure reading: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editWeightReading(HealthMetric metric) {
+    final reading = metric.value as WeightReading;
+    _valueController.text = reading.weight.toString();
+    _heightController.text =
+        reading.height?.toString() ?? _lastHeight.toString();
+    _notesController.text = reading.notes;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Weight Reading'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _valueController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Weight (kg)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _heightController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Height (m)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _clearControllers();
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (_valueController.text.isEmpty ||
+                  _heightController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in all required fields'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              final weight = double.tryParse(_valueController.text);
+              final height = double.tryParse(_heightController.text);
+
+              if (weight == null || height == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid numbers'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final updatedReading = WeightReading(
+                  weight: weight,
+                  height: height,
+                  timestamp: reading.timestamp,
+                  notes: _notesController.text.trim(),
+                );
+
+                await _firestore
+                    .collection('health_metrics')
+                    .doc(metric.id)
+                    .update({
+                  'weight': weight,
+                  'height': height,
+                  'notes': _notesController.text.trim(),
+                });
+
+                await _saveHeight(height);
+                await _loadHealthData();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _clearControllers();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Weight reading updated successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error updating weight reading: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editHeartRateReading(HealthMetric metric) {
+    final reading = metric.value as HeartRateReading;
+    _heartRateController.text = reading.value.toString();
+    _notesController.text = reading.notes;
+    _selectedActivity = reading.activity;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Edit Heart Rate Reading'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _heartRateController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Heart Rate (BPM)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<ActivityType>(
+                  value: _selectedActivity,
+                  decoration: const InputDecoration(
+                    labelText: 'Activity',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: ActivityType.values.map((activity) {
+                    return DropdownMenuItem(
+                      value: activity,
+                      child: Text(activity.toString().split('.').last),
+                    );
+                  }).toList(),
+                  onChanged: (ActivityType? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedActivity = newValue;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (Optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearControllers();
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (_heartRateController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a heart rate value'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                final heartRate = int.tryParse(_heartRateController.text);
+                if (heartRate == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a valid number'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  final updatedReading = HeartRateReading(
+                    value: heartRate,
+                    timestamp: reading.timestamp,
+                    activity: _selectedActivity,
+                    notes: _notesController.text.trim(),
+                  );
+
+                  await _firestore
+                      .collection('health_metrics')
+                      .doc(metric.id)
+                      .update({
+                    'value': heartRate,
+                    'activity': _selectedActivity.index,
+                    'notes': _notesController.text.trim(),
+                  });
+
+                  await _loadHealthData();
+                  if (mounted) {
+                    Navigator.pop(context);
+                    _clearControllers();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('Heart rate reading updated successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error updating heart rate reading: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _LegendItem extends StatelessWidget {
@@ -2349,6 +3521,7 @@ class _LegendItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 16,

@@ -9,6 +9,7 @@ import 'screens/auth/register_screen.dart';
 import 'services/auth_service.dart';
 import 'services/medication_service.dart';
 import 'services/notification_service.dart';
+import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,23 +46,25 @@ class MyApp extends StatelessWidget {
         Provider<NotificationService>.value(
           value: notificationService,
         ),
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+        ),
         StreamProvider<User?>(
           create: (context) => context.read<AuthService>().authStateChanges,
           initialData: null,
         ),
       ],
-      child: MaterialApp(
-        title: 'Medical Helper',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) => MaterialApp(
+          title: 'Medical Helper',
+          debugShowCheckedModeBanner: false,
+          theme: themeProvider.currentTheme,
+          home: const AuthWrapper(),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+            '/register': (context) => const RegisterScreen(),
+          },
         ),
-        home: const AuthWrapper(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegisterScreen(),
-        },
       ),
     );
   }

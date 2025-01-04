@@ -1,5 +1,5 @@
 name: medical_helper
-description: "A medical helper application"
+description: A new Flutter project.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -14,19 +14,20 @@ dependencies:
   firebase_auth: ^4.15.3
   cloud_firestore: ^4.13.6
   provider: ^6.1.1
-  intl: ^0.18.1
-  shared_preferences: ^2.2.2
-  flutter_local_notifications: ^16.3.0
-  timezone: ^0.9.2
-  url_launcher: ^6.2.1
-  fl_chart: ^0.65.0
-  pdf: ^3.10.7
-  path_provider: ^2.1.2
-  share_plus: ^7.2.1
-  encrypt: ^5.0.3
+  intl: ^0.19.0
+  fl_chart: ^0.66.0
   qr_flutter: ^4.1.0
   password_strength: ^0.2.0
   firebase_storage: ^11.5.6
+  shared_preferences: ^2.2.2
+  flutter_local_notifications: ^16.2.0
+  timezone: ^0.9.2
+  url_launcher: ^6.2.1
+  path_provider: ^2.1.1
+  share_plus: ^7.2.1
+  encrypt: ^5.0.3
+  path: ^1.8.2
+  pdf: ^3.10.7
 
 dev_dependencies:
   flutter_test:
