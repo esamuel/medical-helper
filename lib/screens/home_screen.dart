@@ -32,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
+      appBar: _selectedIndex == 0 ? null : AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor,
         title: Text(
           _screens[_selectedIndex].$2,

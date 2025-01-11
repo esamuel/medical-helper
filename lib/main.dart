@@ -58,6 +58,7 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
+            debugShowCheckedModeBanner: false,
             title: 'Medical Helper',
             theme: ThemeData.light().copyWith(
               primaryColor: const Color(0xFF2196F3),
