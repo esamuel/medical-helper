@@ -81,7 +81,7 @@ class MedicationModel {
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = {
       'name': name,
       'dosage': dosage,
       'frequency': frequency.index,
@@ -90,27 +90,68 @@ class MedicationModel {
       'userId': userId,
       'defaultTime': '${defaultTime.hour.toString().padLeft(2, '0')}:${defaultTime.minute.toString().padLeft(2, '0')}',
     };
+    debugPrint('Converting medication to map: $map');
+    return map;
   }
 
   factory MedicationModel.fromMap(Map<String, dynamic> map, String docId) {
-    final timestamp = map['startDate'] as Timestamp;
-    final timeStr = map['defaultTime'] as String;
-    final timeParts = timeStr.split(':');
-    final defaultTime = TimeOfDay(
-      hour: int.parse(timeParts[0]),
-      minute: int.parse(timeParts[1]),
-    );
+    try {
+      debugPrint('Creating MedicationModel from map: $map with ID: $docId');
+      
+      // Validate required fields
+      final requiredFields = ['name', 'dosage', 'frequency', 'userId', 'startDate', 'defaultTime'];
+      final missingFields = requiredFields.where((field) => !map.containsKey(field)).toList();
+      
+      if (missingFields.isNotEmpty) {
+        debugPrint('Missing fields: $missingFields');
+        throw FormatException('Missing required fields: $missingFields in data: $map');
+      }
 
-    return MedicationModel(
-      id: docId,
-      name: map['name'] as String,
-      dosage: map['dosage'] as String,
-      frequency: MedicationFrequency.values[map['frequency'] as int],
-      instructions: map['instructions'] as String? ?? '',
-      startDate: timestamp.toDate(),
-      userId: map['userId'] as String,
-      defaultTime: defaultTime,
-    );
+      // Parse the timestamp
+      final timestamp = map['startDate'] as Timestamp;
+      final startDate = timestamp.toDate();
+      debugPrint('Parsed startDate: $startDate');
+
+      // Parse the time string
+      final timeStr = map['defaultTime'] as String;
+      final timeParts = timeStr.split(':');
+      if (timeParts.length != 2) {
+        throw FormatException('Invalid time format: $timeStr');
+      }
+      
+      final defaultTime = TimeOfDay(
+        hour: int.parse(timeParts[0]),
+        minute: int.parse(timeParts[1]),
+      );
+      debugPrint('Parsed defaultTime: ${defaultTime.hour}:${defaultTime.minute}');
+
+      // Parse the frequency
+      final frequencyIndex = map['frequency'] as int;
+      if (frequencyIndex < 0 || frequencyIndex >= MedicationFrequency.values.length) {
+        throw FormatException('Invalid frequency index: $frequencyIndex');
+      }
+      final frequency = MedicationFrequency.values[frequencyIndex];
+      debugPrint('Parsed frequency: $frequency');
+
+      final model = MedicationModel(
+        id: docId,
+        name: map['name'] as String,
+        dosage: map['dosage'] as String,
+        frequency: frequency,
+        instructions: map['instructions'] as String? ?? '',
+        startDate: startDate,
+        userId: map['userId'] as String,
+        defaultTime: defaultTime,
+      );
+      
+      debugPrint('Successfully created MedicationModel: $model');
+      return model;
+    } catch (e, stackTrace) {
+      debugPrint('Error creating MedicationModel from map: $e');
+      debugPrint('Data: $map');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   String formatTakingTimes() {
@@ -144,5 +185,10 @@ class MedicationModel {
       userId: userId ?? this.userId,
       defaultTime: defaultTime ?? this.defaultTime,
     );
+  }
+
+  @override
+  String toString() {
+    return 'MedicationModel(id: $id, name: $name, dosage: $dosage, frequency: $frequency, startDate: $startDate, defaultTime: ${defaultTime.hour}:${defaultTime.minute})';
   }
 } 

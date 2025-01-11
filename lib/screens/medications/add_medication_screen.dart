@@ -60,8 +60,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         debugPrint('Creating medication for user: ${user.uid}');
 
         final medication = MedicationModel(
-          id: widget.medicationToEdit?.id ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
+          id: widget.medicationToEdit?.id ?? '',  // Let Firestore generate the ID
           name: _name,
           dosage: _dosage,
           frequency: _frequency,
@@ -76,7 +75,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         String? medicationId;
         if (widget.medicationToEdit != null) {
           debugPrint('Updating existing medication with ID: ${medication.id}');
-          await medicationService.updateMedication(medication);
+          await medicationService.updateMedication(medication.id, medication);
           medicationId = medication.id;
           debugPrint('Successfully updated medication');
         } else {
@@ -88,8 +87,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         // Try to schedule notifications, but don't let failures prevent saving
         try {
           if (_frequency != MedicationFrequency.asNeeded) {
-            debugPrint(
-                'Scheduling notifications for medication: $medicationId');
+            debugPrint('Scheduling notifications for medication: $medicationId');
             await notificationService.scheduleMedicationReminders(
               medication.copyWith(id: medicationId),
             );
@@ -100,28 +98,25 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           // Don't rethrow - we don't want notification failures to prevent medication saving
         }
 
-        if (mounted) {
-          debugPrint('Navigating back to medications list');
+        if (context.mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(widget.medicationToEdit != null
-                  ? 'Medication updated successfully'
-                  : 'Medication added successfully'),
-              behavior: SnackBarBehavior.floating,
+              content: Text(
+                widget.medicationToEdit != null
+                    ? 'Medication updated successfully'
+                    : 'Medication added successfully',
+              ),
             ),
           );
         }
-      } catch (e, stackTrace) {
+      } catch (e) {
         debugPrint('Error saving medication: $e');
-        debugPrint('Stack trace: $stackTrace');
-        if (mounted) {
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  'Error ${widget.medicationToEdit != null ? 'updating' : 'adding'} medication: $e'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.red,
+              content: Text('Error: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }

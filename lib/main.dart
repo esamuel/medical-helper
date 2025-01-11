@@ -9,6 +9,7 @@ import 'screens/auth/register_screen.dart';
 import 'services/auth_service.dart';
 import 'services/medication_service.dart';
 import 'services/notification_service.dart';
+import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,31 +37,79 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<AuthService>(
-          create: (_) => AuthService(),
-        ),
-        Provider<MedicationService>(
-          create: (_) => MedicationService(),
-        ),
-        Provider<NotificationService>.value(
-          value: notificationService,
-        ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        Provider<NotificationService>.value(value: notificationService),
+        Provider<AuthService>(create: (_) => AuthService()),
         StreamProvider<User?>(
-          create: (context) => context.read<AuthService>().authStateChanges,
+          create: (context) => FirebaseAuth.instance.authStateChanges(),
           initialData: null,
         ),
-      ],
-      child: MaterialApp(
-        title: 'Medical Helper',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
+        ProxyProvider<User?, MedicationService>(
+          create: (_) => MedicationService(),
+          update: (_, user, previousService) {
+            debugPrint('Updating MedicationService with user: ${user?.uid}');
+            return MedicationService(userId: user?.uid);
+          },
+          dispose: (_, service) {
+            debugPrint('Disposing MedicationService');
+          },
         ),
-        home: const AuthWrapper(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegisterScreen(),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Medical Helper',
+            theme: ThemeData.light().copyWith(
+              primaryColor: const Color(0xFF2196F3),
+              scaffoldBackgroundColor: Colors.white,
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF2196F3),
+                foregroundColor: Colors.white,
+              ),
+              colorScheme: ColorScheme.light(
+                primary: const Color(0xFF2196F3),
+                error: Colors.red.shade700,
+                surface: Colors.white,
+                onSurface: Colors.black87,
+              ),
+              navigationBarTheme: NavigationBarThemeData(
+                labelTextStyle: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.selected)) {
+                    return const TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+                  }
+                  return const TextStyle(fontSize: 12);
+                }),
+              ),
+            ),
+            darkTheme: ThemeData.dark().copyWith(
+              primaryColor: const Color(0xFF1565C0),
+              scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF1565C0),
+                foregroundColor: Colors.white,
+              ),
+              colorScheme: ColorScheme.dark(
+                primary: const Color(0xFF1565C0),
+                error: Colors.red.shade300,
+                surface: const Color(0xFF1A1A1A),
+                onSurface: Colors.white70,
+              ),
+              navigationBarTheme: NavigationBarThemeData(
+                labelTextStyle: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.selected)) {
+                    return const TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+                  }
+                  return const TextStyle(fontSize: 12);
+                }),
+              ),
+            ),
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            home: const AuthWrapper(),
+            routes: {
+              '/login': (context) => const LoginScreen(),
+              '/register': (context) => const RegisterScreen(),
+            },
+          );
         },
       ),
     );
@@ -73,11 +122,6 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<User?>();
-    
-    if (user != null) {
-      return const HomeScreen();
-    }
-    
-    return const LoginScreen();
+    return user != null ? const HomeScreen() : const LoginScreen();
   }
 }

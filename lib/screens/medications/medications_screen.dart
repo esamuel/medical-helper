@@ -11,249 +11,183 @@ class MedicationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final medicationService = context.read<MedicationService>();
     final user = context.watch<User?>();
+    final theme = Theme.of(context);
 
     if (user == null) {
-      debugPrint('User is null in MedicationsScreen');
-      return const Scaffold(
-        body: Center(
-          child: Text('Please log in to view medications'),
+      return Center(
+        child: Text(
+          'Please log in to view medications',
+          style: theme.textTheme.bodyLarge,
         ),
       );
     }
 
-    debugPrint('Building MedicationsScreen for user: ${user.uid}');
+    // Create a new MedicationService instance with the current user ID
+    final medicationService = Provider.of<MedicationService>(context);
+    debugPrint('Current user ID: ${user.uid}');
+    debugPrint('MedicationService user ID: ${medicationService.userId}');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      appBar: AppBar(
-        title: const Text(
-          'My Medications',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        backgroundColor: const Color(0xFF00695C),
-        elevation: 0,
-      ),
-      body: StreamBuilder<List<MedicationModel>>(
-        stream: medicationService.getMedicationsStream(user.uid),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.redAccent.shade200,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Error loading medications',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      (context as Element).markNeedsBuild();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00695C),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
+    return Stack(
+      children: [
+        StreamBuilder<List<MedicationModel>>(
+          stream: medicationService.getMedications(),
+          builder: (context, snapshot) {
+            debugPrint('StreamBuilder state: ${snapshot.connectionState}');
+            debugPrint('StreamBuilder hasData: ${snapshot.hasData}');
+            debugPrint('StreamBuilder error: ${snapshot.error}');
+            if (snapshot.hasData) {
+              debugPrint('Number of medications: ${snapshot.data!.length}');
+            }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF80CBC4),
-              ),
-            );
-          }
-
-          final medications = snapshot.data ?? [];
-
-          if (medications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.medication_outlined,
-                    size: 64,
-                    color: const Color(0xFF80CBC4).withOpacity(0.6),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No medications added yet',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
+            if (snapshot.hasError) {
+              debugPrint('Error in MedicationsScreen: ${snapshot.error}');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: theme.colorScheme.error,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () => _addMedication(context),
-                    icon: const Icon(
-                      Icons.add,
-                      color: Color(0xFF80CBC4),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading medications',
+                      style: theme.textTheme.titleLarge,
                     ),
-                    label: const Text(
-                      'Add Medication',
-                      style: TextStyle(
-                        color: Color(0xFF80CBC4),
-                      ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please try again later',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: medications.length,
-            itemBuilder: (context, index) {
-              final medication = medications[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                color: const Color(0xFF2A2A2A),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              medication.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit_outlined,
-                                  color: Color(0xFF80CBC4),
-                                ),
-                                onPressed: () =>
-                                    _editMedication(context, medication),
-                                tooltip: 'Edit',
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent.shade200,
-                                ),
-                                onPressed: () => _deleteMedication(
-                                  context,
-                                  medicationService,
-                                  medication,
-                                ),
-                                tooltip: 'Delete',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Dosage: ${medication.dosage}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.87),
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Frequency: ${medication.frequencyText}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.87),
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (medication.instructions.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Instructions:',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.87),
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          medication.instructions,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text(
-                        'Start Date: ${_formatDate(medication.startDate)}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Taking Times: ${medication.formatTakingTimes()}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addMedication(context),
-        backgroundColor: const Color(0xFF00695C),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-    );
-  }
+            }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            final medications = snapshot.data ?? [];
+            debugPrint('Medications data: $medications');
+
+            if (medications.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.medication_outlined,
+                      size: 64,
+                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No medications added yet',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tap the + button to add a medication',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: medications.length,
+              itemBuilder: (context, index) {
+                final medication = medications[index];
+                debugPrint('Building medication card for: ${medication.name}');
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                medication.name,
+                                style: theme.textTheme.titleLarge,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.edit_outlined,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  onPressed: () =>
+                                      _editMedication(context, medication),
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  onPressed: () => _deleteMedication(
+                                    context,
+                                    medication,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Dosage: ${medication.dosage}',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Frequency: ${medication.frequencyText}',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        if (medication.instructions.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Instructions: ${medication.instructions}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Text(
+                          'Start Date: ${_formatDate(medication.startDate)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            onPressed: () => _addMedication(context),
+            backgroundColor: theme.colorScheme.primary,
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
+    );
   }
 
   void _addMedication(BuildContext context) {
@@ -276,78 +210,54 @@ class MedicationsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _deleteMedication(
+  void _deleteMedication(
     BuildContext context,
-    MedicationService medicationService,
     MedicationModel medication,
-  ) async {
-    final confirm = await showDialog<bool>(
+  ) {
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2A2A2A),
-        title: const Text(
-          'Delete Medication',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete ${medication.name}?',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.87),
-            fontSize: 16,
-          ),
-        ),
+        title: const Text('Delete Medication'),
+        content: Text('Are you sure you want to delete ${medication.name}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'CANCEL',
-              style: TextStyle(color: Color(0xFF80CBC4)),
-            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () async {
+              final medicationService = context.read<MedicationService>();
+              Navigator.pop(context);
+              try {
+                await medicationService.deleteMedication(medication.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${medication.name} deleted'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Error deleting medication'),
+                    ),
+                  );
+                }
+              }
+            },
             child: Text(
-              'DELETE',
-              style: TextStyle(color: Colors.redAccent.shade200),
+              'Delete',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
         ],
       ),
     );
+  }
 
-    if (confirm == true) {
-      try {
-        // Cancel notifications before deleting
-        final notificationService = context.read<NotificationService>();
-        await notificationService.cancelMedicationReminders(medication.id);
-
-        // Delete the medication
-        await medicationService.deleteMedication(medication.id);
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Medication deleted'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Error deleting medication: $e');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error deleting medication: $e'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }

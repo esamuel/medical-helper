@@ -32,6 +32,14 @@ service cloud.firestore {
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }
+
+      // Medications subcollection rules
+      match /medications/{medicationId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
 
     // Emergency Contacts collection rules

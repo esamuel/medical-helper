@@ -169,126 +169,116 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Emergency Contacts'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: _contacts.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.contact_phone_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No emergency contacts yet',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add contacts that should be notified in case of emergency',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _contacts.length,
-              itemBuilder: (context, index) {
-                final contact = _contacts[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: contact.isPrimary
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.secondary,
-                      child: Text(
-                        contact.name[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
+    return _contacts.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.contacts_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No emergency contacts added yet',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap the + button to add a contact',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _contacts.length,
+            itemBuilder: (context, index) {
+              final contact = _contacts[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: contact.isPrimary
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.secondary,
+                    child: Text(
+                      contact.name[0].toUpperCase(),
+                      style: const TextStyle(color: Colors.white),
                     ),
-                    title: Row(
-                      children: [
-                        Text(contact.name),
-                        if (contact.isPrimary) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Primary',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
+                  ),
+                  title: Row(
+                    children: [
+                      Text(contact.name),
+                      if (contact.isPrimary) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'Primary',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(contact.relationship),
-                        Text(contact.phoneNumber),
-                        if (contact.alternativePhone != null)
-                          Text('Alt: ${contact.alternativePhone}'),
-                        if (contact.email != null) Text(contact.email!),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.phone),
-                          onPressed: () => _makePhoneCall(contact.phoneNumber),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            setState(() {
-                              _contacts.removeAt(index);
-                              // Update primary contact if needed
-                              if (_contacts.isNotEmpty &&
-                                  contact.isPrimary &&
-                                  !_contacts.any((c) => c.isPrimary)) {
-                                _contacts[0] = EmergencyContact(
-                                  name: _contacts[0].name,
-                                  relationship: _contacts[0].relationship,
-                                  phoneNumber: _contacts[0].phoneNumber,
-                                  alternativePhone: _contacts[0].alternativePhone,
-                                  email: _contacts[0].email,
-                                  isPrimary: true,
-                                );
-                              }
-                            });
-                          },
                         ),
                       ],
-                    ),
-                    isThreeLine: true,
+                    ],
                   ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addContact,
-        child: const Icon(Icons.add),
-      ),
-    );
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(contact.relationship),
+                      Text(contact.phoneNumber),
+                      if (contact.alternativePhone != null)
+                        Text('Alt: ${contact.alternativePhone}'),
+                      if (contact.email != null) Text(contact.email!),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.phone),
+                        onPressed: () => _makePhoneCall(contact.phoneNumber),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () {
+                          setState(() {
+                            _contacts.removeAt(index);
+                            // Update primary contact if needed
+                            if (_contacts.isNotEmpty &&
+                                contact.isPrimary &&
+                                !_contacts.any((c) => c.isPrimary)) {
+                              _contacts[0] = EmergencyContact(
+                                name: _contacts[0].name,
+                                relationship: _contacts[0].relationship,
+                                phoneNumber: _contacts[0].phoneNumber,
+                                alternativePhone: _contacts[0].alternativePhone,
+                                email: _contacts[0].email,
+                                isPrimary: true,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  isThreeLine: true,
+                ),
+              );
+            },
+          );
   }
-} 
+}

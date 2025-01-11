@@ -14,11 +14,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const HealthDataScreen(),
-    const MedicationsScreen(),
-    const EmergencyContactsScreen(),
-    const ProfileScreen(),
+  final List<(Widget, String)> _screens = [
+    (const HealthDataScreen(), 'Health Data'),
+    (const MedicationsScreen(), 'Medications'),
+    (const EmergencyContactsScreen(), 'Emergency Contacts'),
+    (const ProfileScreen(), 'Profile'),
   ];
 
   void _onItemTapped(int index) {
@@ -29,30 +29,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      body: _screens[_selectedIndex],
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        title: Text(
+          _screens[_selectedIndex].$2,
+          style: TextStyle(color: theme.appBarTheme.foregroundColor),
+        ),
+      ),
+      body: SafeArea(
+        child: _screens[_selectedIndex].$1,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
-        destinations: const [
+        backgroundColor: theme.scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: theme.colorScheme.primary.withOpacity(0.2),
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.monitor_heart),
-            label: 'Health Data',
+            icon: Icon(Icons.monitor_heart_outlined),
+            selectedIcon: Icon(Icons.monitor_heart),
+            label: 'Health',
           ),
           NavigationDestination(
-            icon: Icon(Icons.medication),
+            icon: Icon(Icons.medication_outlined),
+            selectedIcon: Icon(Icons.medication),
             label: 'Medications',
           ),
           NavigationDestination(
             icon: Icon(Icons.contacts_outlined),
+            selectedIcon: Icon(Icons.contacts),
             label: 'Emergency',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
             label: 'Profile',
           ),
         ],
       ),
     );
   }
-} 
+}

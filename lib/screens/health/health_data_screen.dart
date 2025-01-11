@@ -438,7 +438,7 @@ class HealthMetric {
       );
     } else if (type == 'Heart Rate') {
       value = HeartRateReading(
-        value: map['value'] as int,
+        value: (map['value'] as num).toInt(),
         timestamp: timestamp,
         activity: map['activity'] != null
             ? ActivityType.values[map['activity'] as int]
@@ -1359,223 +1359,167 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+      return const Center(
+        child: CircularProgressIndicator(),
       );
     }
 
     return DefaultTabController(
       length: _healthData.length,
       child: Scaffold(
-        backgroundColor: const Color(0xFF00695C), // Dark teal background
-        appBar: AppBar(
-          title: const Text(
-            'Medical Helper',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          backgroundColor: const Color(0xFF00695C), // Dark teal background
-          elevation: 0,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.print, color: Colors.white),
-              onPressed: () {
-                // Add print functionality
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.dark_mode, color: Colors.white),
-              onPressed: () {
-                setState(() {
-                  _isDarkMode = !_isDarkMode;
-                });
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-          bottom: TabBar(
-            isScrollable: true,
-            indicatorColor: Colors.white,
-            tabs: _healthData.keys.map((String metric) {
-              return Tab(
-                child: Text(
-                  metric,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
-                ),
-              );
-            }).toList(),
-            onTap: (index) {
-              setState(() {
-                _selectedMetric = _healthData.keys.elementAt(index);
-              });
-            },
-          ),
-        ),
-        body: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A1A1A), // Dark background for the content
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-          ),
-          child: TabBarView(
-            children: _healthData.entries.map((entry) {
-              final metrics = entry.value;
-              return metrics.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.show_chart,
-                            size: 64,
-                            color: Colors.white.withOpacity(0.6),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No ${entry.key} data yet',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap the + button to add data',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        if (entry.key == 'Blood Pressure')
-                          _buildBloodPressureGraph()
-                        else if (entry.key == 'Blood Sugar')
-                          _buildBloodSugarGraph()
-                        else if (entry.key == 'Weight')
-                          _buildWeightGraph()
-                        else if (entry.key == 'Heart Rate')
-                          _buildHeartRateGraph(),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: metrics.length,
-                            itemBuilder: (context, index) {
-                              final metric = metrics[index];
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                color: const Color(
-                                    0xFF2A2A2A), // Dark card background
-                                child: ListTile(
-                                  title: metric.type == 'Blood Pressure'
-                                      ? _buildBloodPressureTitle(
-                                          metric.value as BloodPressureReading)
-                                      : metric.type == 'Blood Sugar'
-                                          ? _buildBloodSugarTitle(
-                                              metric.value as BloodSugarReading)
-                                          : metric.type == 'Weight'
-                                              ? _buildWeightTitle(
-                                                  metric.value as WeightReading)
-                                              : metric.type == 'Heart Rate'
-                                                  ? _buildHeartRateTitle(
-                                                      metric.value
-                                                          as HeartRateReading)
-                                                  : Text(
-                                                      '${metric.value} ${metric.unit}',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                  subtitle: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        DateFormat('MMM d, y - h:mm a')
-                                            .format(metric.timestamp),
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.6),
-                                        ),
-                                      ),
-                                      if (metric.notes.isNotEmpty)
-                                        Text(
-                                          'Notes: ${metric.notes}',
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withOpacity(0.6),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () =>
-                                        _deleteHealthMetric(metric.id, index),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-            }).toList(),
-          ),
-        ),
+        backgroundColor: const Color(0xFF1A1A1A),
         floatingActionButton: FloatingActionButton(
           onPressed: _addHealthData,
           backgroundColor: const Color(0xFF00695C),
           child: const Icon(Icons.add, color: Colors.white),
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: const Color(0xFF1A1A1A),
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white.withOpacity(0.6),
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.monitor_heart),
-              label: 'Health Data',
+        body: Column(
+          children: [
+            Container(
+              color: const Color(0xFF00695C),
+              child: TabBar(
+                isScrollable: true,
+                indicatorColor: Colors.white,
+                tabs: _healthData.keys.map((String metric) {
+                  return Tab(
+                    child: Text(
+                      metric,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onTap: (index) {
+                  setState(() {
+                    _selectedMetric = _healthData.keys.elementAt(index);
+                  });
+                },
+              ),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.medication),
-              label: 'Medications',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.emergency),
-              label: 'Emergency',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: TabBarView(
+                  children: _healthData.entries.map((entry) {
+                    final metrics = entry.value;
+                    return metrics.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.show_chart,
+                                  size: 64,
+                                  color: Colors.white.withOpacity(0.6),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No ${entry.key} data yet',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tap the + button to add data',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              if (entry.key == 'Blood Pressure')
+                                _buildBloodPressureGraph()
+                              else if (entry.key == 'Blood Sugar')
+                                _buildBloodSugarGraph()
+                              else if (entry.key == 'Weight')
+                                _buildWeightGraph()
+                              else if (entry.key == 'Heart Rate')
+                                _buildHeartRateGraph(),
+                              Expanded(
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: metrics.length,
+                                  itemBuilder: (context, index) {
+                                    final metric = metrics[index];
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      color: const Color(
+                                          0xFF2A2A2A), // Dark card background
+                                      child: ListTile(
+                                        title: metric.type == 'Blood Pressure'
+                                            ? _buildBloodPressureTitle(
+                                                metric.value as BloodPressureReading)
+                                            : metric.type == 'Blood Sugar'
+                                                ? _buildBloodSugarTitle(
+                                                    metric.value as BloodSugarReading)
+                                                : metric.type == 'Weight'
+                                                    ? _buildWeightTitle(
+                                                        metric.value as WeightReading)
+                                                    : metric.type == 'Heart Rate'
+                                                        ? _buildHeartRateTitle(
+                                                            metric.value
+                                                                as HeartRateReading)
+                                                        : Text(
+                                                            '${metric.value} ${metric.unit}',
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                            ),
+                                                          ),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              DateFormat('MMM d, y - h:mm a')
+                                                  .format(metric.timestamp),
+                                              style: TextStyle(
+                                                color: Colors.white.withOpacity(0.6),
+                                              ),
+                                            ),
+                                            if (metric.notes.isNotEmpty)
+                                              Text(
+                                                'Notes: ${metric.notes}',
+                                                style: TextStyle(
+                                                  color:
+                                                      Colors.white.withOpacity(0.6),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        trailing: IconButton(
+                                          icon: const Icon(
+                                            Icons.delete,
+                                            color: Colors.white,
+                                          ),
+                                          onPressed: () =>
+                                              _deleteHealthMetric(metric.id, index),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                  }).toList(),
+                ),
+              ),
             ),
           ],
         ),

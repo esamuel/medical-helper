@@ -5,17 +5,43 @@ import '../models/medication_model.dart';
 class MedicationService {
   final FirebaseFirestore _firestore;
   final String collection = 'medications';
+  final String? _userId;
 
-  MedicationService() : _firestore = FirebaseFirestore.instance {
-    debugPrint('Initializing MedicationService');
+  // Add public getter for userId
+  String? get userId => _userId;
+
+  MedicationService({String? userId}) 
+    : _userId = userId,
+      _firestore = FirebaseFirestore.instance {
+    debugPrint('MedicationService initialized with user ID: $_userId');
   }
 
   Future<String> addMedication(MedicationModel medication) async {
+    if (_userId == null) throw Exception('User not authenticated');
     try {
-      debugPrint('Adding medication to Firestore: ${medication.toMap()}');
-      final docRef =
-          await _firestore.collection(collection).add(medication.toMap());
+      // Convert the TimeOfDay to a string in the format "HH:mm"
+      final defaultTimeStr = '${medication.defaultTime.hour.toString().padLeft(2, '0')}:${medication.defaultTime.minute.toString().padLeft(2, '0')}';
+      
+      final data = {
+        'name': medication.name,
+        'dosage': medication.dosage,
+        'frequency': medication.frequency.index,
+        'instructions': medication.instructions,
+        'startDate': Timestamp.fromDate(medication.startDate),
+        'userId': medication.userId,
+        'defaultTime': defaultTimeStr,
+      };
+      
+      debugPrint('Adding medication to Firestore: $data');
+      final docRef = await _firestore
+          .collection(collection)
+          .add(data);
       debugPrint('Successfully added medication with ID: ${docRef.id}');
+      
+      // Verify the document was created
+      final newDoc = await docRef.get();
+      debugPrint('Verification - New document data: ${newDoc.data()}');
+      
       return docRef.id;
     } catch (e, stackTrace) {
       debugPrint('Error adding medication: $e');
@@ -24,14 +50,81 @@ class MedicationService {
     }
   }
 
-  Future<void> updateMedication(MedicationModel medication) async {
+  Stream<List<MedicationModel>> getMedications() {
+    debugPrint('getMedications called with user ID: $_userId');
+    if (_userId == null) {
+      debugPrint('getMedications: No user ID available');
+      return Stream.value([]);
+    }
+    
+    // First, let's check if the collection exists and has any documents
+    _firestore.collection(collection).get().then((snapshot) {
+      debugPrint('Total documents in collection: ${snapshot.docs.length}');
+      for (var doc in snapshot.docs) {
+        debugPrint('Document ${doc.id} data: ${doc.data()}');
+      }
+    }).catchError((error) {
+      debugPrint('Error checking collection: $error');
+    });
+
+    final query = _firestore
+        .collection(collection)
+        .where('userId', isEqualTo: _userId);
+    
+    debugPrint('Querying Firestore collection: $collection where userId = $_userId');
+    
+    return query
+        .snapshots()
+        .map((snapshot) {
+          try {
+            debugPrint('getMedications: Got ${snapshot.docs.length} documents');
+            if (snapshot.docs.isEmpty) {
+              debugPrint('No medications found for user $_userId');
+            } else {
+              for (var doc in snapshot.docs) {
+                debugPrint('Found document ${doc.id} with data: ${doc.data()}');
+              }
+            }
+            return snapshot.docs.map((doc) {
+              try {
+                final data = doc.data();
+                debugPrint('Processing document ${doc.id}: $data');
+                
+                // Ensure all required fields are present
+                if (!data.containsKey('defaultTime')) {
+                  // If defaultTime is missing but takingTimes is present, use the first taking time
+                  if (data.containsKey('takingTimes') && (data['takingTimes'] as List).isNotEmpty) {
+                    data['defaultTime'] = (data['takingTimes'] as List)[0];
+                  } else {
+                    // Default to 8:00 AM if no time is specified
+                    data['defaultTime'] = '08:00';
+                  }
+                }
+                
+                return MedicationModel.fromMap(data, doc.id);
+              } catch (e, stackTrace) {
+                debugPrint('Error processing medication document ${doc.id}: $e');
+                debugPrint('Stack trace: $stackTrace');
+                rethrow;
+              }
+            }).toList();
+          } catch (e, stackTrace) {
+            debugPrint('Error processing medications snapshot: $e');
+            debugPrint('Stack trace: $stackTrace');
+            rethrow;
+          }
+        });
+  }
+
+  Future<void> updateMedication(String id, MedicationModel medication) async {
+    if (_userId == null) throw Exception('User not authenticated');
     try {
-      debugPrint('Updating medication in Firestore: ${medication.toMap()}');
+      debugPrint('Updating medication with ID: $id');
       await _firestore
           .collection(collection)
-          .doc(medication.id)
+          .doc(id)
           .update(medication.toMap());
-      debugPrint('Successfully updated medication with ID: ${medication.id}');
+      debugPrint('Successfully updated medication');
     } catch (e, stackTrace) {
       debugPrint('Error updating medication: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -39,75 +132,17 @@ class MedicationService {
     }
   }
 
-  Future<void> deleteMedication(String medicationId) async {
+  Future<void> deleteMedication(String id) async {
+    if (_userId == null) throw Exception('User not authenticated');
     try {
-      debugPrint('Deleting medication from Firestore: $medicationId');
-      await _firestore.collection(collection).doc(medicationId).delete();
-      debugPrint('Successfully deleted medication with ID: $medicationId');
+      debugPrint('Deleting medication with ID: $id');
+      await _firestore
+          .collection(collection)
+          .doc(id)
+          .delete();
+      debugPrint('Successfully deleted medication');
     } catch (e, stackTrace) {
       debugPrint('Error deleting medication: $e');
-      debugPrint('Stack trace: $stackTrace');
-      rethrow;
-    }
-  }
-
-  Stream<List<MedicationModel>> getMedicationsStream(String userId) {
-    debugPrint('Getting medications stream for user: $userId');
-    return _firestore
-        .collection(collection)
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) {
-      try {
-        debugPrint(
-            'Processing ${snapshot.docs.length} medications from stream');
-        final medications = snapshot.docs
-            .map((doc) {
-              final data = doc.data();
-              debugPrint('Processing document: ${doc.id}');
-
-              try {
-                final medication = MedicationModel.fromMap(data, doc.id);
-                debugPrint(
-                    'Successfully converted to MedicationModel: ${medication.name}');
-                return medication;
-              } catch (e, stackTrace) {
-                debugPrint('Error converting document to MedicationModel: $e');
-                debugPrint('Stack trace: $stackTrace');
-                return null;
-              }
-            })
-            .where((med) => med != null) // Filter out null medications
-            .cast<MedicationModel>() // Cast to non-null MedicationModel
-            .toList();
-
-        medications.sort((a, b) => b.startDate.compareTo(a.startDate));
-        debugPrint('Returning ${medications.length} sorted medications');
-        for (var med in medications) {
-          debugPrint('Medication in list: ${med.name} (${med.id})');
-        }
-        return medications;
-      } catch (e, stackTrace) {
-        debugPrint('Error processing medications stream: $e');
-        debugPrint('Stack trace: $stackTrace');
-        return []; // Return empty list instead of throwing
-      }
-    });
-  }
-
-  Future<MedicationModel?> getMedication(String medicationId) async {
-    try {
-      debugPrint('Getting medication from Firestore: $medicationId');
-      final doc =
-          await _firestore.collection(collection).doc(medicationId).get();
-      if (!doc.exists) {
-        debugPrint('No medication found with ID: $medicationId');
-        return null;
-      }
-      debugPrint('Found medication: ${doc.data()}');
-      return MedicationModel.fromMap(doc.data()!, doc.id);
-    } catch (e, stackTrace) {
-      debugPrint('Error getting medication: $e');
       debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
