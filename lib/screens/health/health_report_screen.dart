@@ -6,6 +6,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'dart:typed_data';
+import 'package:printing/printing.dart';
+import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:cross_file/cross_file.dart';
 
 class HealthReportScreen extends StatefulWidget {
@@ -21,8 +23,10 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
   DateTime _endDate = DateTime.now();
   final Set<String> _selectedMetrics = {};
-  bool _isGenerating = false;
-  String _reportText = '';
+  bool _isLoading = false;
+  final String _reportText = 'Generating report, please wait...';
+  Uint8List? _pdfBytes;
+  String? _userName;
 
   final List<String> _availableMetrics = [
     'Blood Pressure',
@@ -32,6 +36,228 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
     'Temperature',
     'Oxygen Level',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserName();
+  }
+
+  Future<void> _fetchUserName() async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) {
+      throw Exception('User not logged in');
+    }
+
+    final userDoc = await _firestore.collection('users').doc(userId).get();
+    setState(() {
+      _userName = userDoc.data()?['fullName'] ?? 'User';
+    });
+  }
+
+  Future<void> _generateReport() async {
+    if (_selectedMetrics.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one metric')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('Starting report generation');
+      print('Selected metrics: $_selectedMetrics');
+      final pdf = pw.Document();
+
+      // Fetch all metric data first
+      final allMetricData = <String, List<Map<String, dynamic>>>{};
+      for (final metric in _selectedMetrics) {
+        print('Fetching data for metric: $metric');
+        final data = await _fetchMetricData(metric);
+        print('Fetched ${data.length} records for $metric');
+        print(
+            'Sample data for $metric: ${data.isNotEmpty ? data.first : "no data"}');
+        allMetricData[metric] = data;
+      }
+
+      // Check if we have any data
+      final hasData = allMetricData.values.any((list) => list.isNotEmpty);
+      if (!hasData) {
+        print('No data found for any selected metrics');
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No data found for the selected date range'),
+            ),
+          );
+        }
+        return;
+      }
+
+      print('Building PDF document');
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (context) {
+            final widgets = <pw.Widget>[];
+            print('Building PDF widgets');
+
+            // Add header
+            widgets.add(
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    '${_userName!.toUpperCase()}\'S HEALTH REPORT',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Date Range: ${DateFormat('MMM d, yyyy').format(_startDate)} - ${DateFormat('MMM d, yyyy').format(_endDate)}',
+                  ),
+                  pw.SizedBox(height: 20),
+                ],
+              ),
+            );
+
+            // Add each metric's data
+            for (final metric in _selectedMetrics) {
+              print('Processing metric for PDF: $metric');
+              final metricData = allMetricData[metric] ?? [];
+              print('Data length for $metric: ${metricData.length}');
+              print(
+                  'Sample data for table: ${metricData.isNotEmpty ? metricData.first : "no data"}');
+
+              widgets.add(
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      metric.toUpperCase(),
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 10),
+                    if (metricData.isEmpty)
+                      pw.Text('No data available for this metric')
+                    else if (metric == 'Blood Sugar')
+                      _buildBloodSugarTable(metricData)
+                    else if (metric == 'Blood Pressure')
+                      _buildBloodPressureTable(metricData)
+                    else
+                      _buildGenericTable(metric, metricData),
+                    pw.SizedBox(height: 20),
+                  ],
+                ),
+              );
+            }
+
+            print('Finished building PDF widgets');
+            return widgets;
+          },
+        ),
+      );
+
+      _pdfBytes = await pdf.save();
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PDFScreen(pdfBytes: _pdfBytes!),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error generating PDF: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating PDF: $e')),
+        );
+      }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchMetricData(String metric) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) {
+      throw Exception('User not logged in');
+    }
+
+    print('Fetching data for metric: $metric, userId: $userId');
+
+    final snapshot = await _firestore
+        .collection('health_metrics')
+        .where('userId', isEqualTo: userId)
+        .where('type', isEqualTo: metric)
+        .get();
+
+    print('Raw documents fetched for $metric: ${snapshot.docs.length}');
+
+    final processedData = snapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          print('Processing document for $metric: ${doc.id}');
+          print('Document data: $data');
+
+          try {
+            final timestamp = _parseTimestamp(data['timestamp']);
+            print('Parsed timestamp: $timestamp');
+
+            if (timestamp
+                    .isAfter(_startDate.subtract(const Duration(days: 1))) &&
+                timestamp.isBefore(_endDate.add(const Duration(days: 1)))) {
+              print('Document is within date range');
+              final processedDoc = {
+                ...data,
+                'id': doc.id,
+                'parsedDate': timestamp
+              };
+              print('Processed document: $processedDoc');
+              return processedDoc;
+            } else {
+              print(
+                  'Document outside date range: $timestamp not in ${_startDate} - ${_endDate}');
+            }
+          } catch (e) {
+            print('Error processing document ${doc.id} for $metric: $e');
+          }
+          return null;
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList();
+
+    print('Final processed data count for $metric: ${processedData.length}');
+    return processedData;
+  }
+
+  DateTime _parseTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return timestamp.toDate();
+    } else if (timestamp is int) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    } else if (timestamp is String) {
+      return DateTime.parse(timestamp);
+    }
+    throw FormatException('Unable to parse timestamp: $timestamp');
+  }
 
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime? picked = await showDatePicker(
@@ -57,240 +283,170 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
     }
   }
 
-  Future<void> _generateReport() async {
-    if (_selectedMetrics.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one metric'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isGenerating = true;
-      _reportText = '';
-    });
-
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Get user's name from Firestore
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      final userName = userDoc.data()?['fullName'] ?? 'User';
-
-      // Build report header
-      final StringBuffer report = StringBuffer();
-      report.writeln('${userName.toUpperCase()}\'S HEALTH REPORT');
-      report.writeln('=' * 100);
-      report.writeln(
-          'Date Range: ${DateFormat('MMM d, y').format(_startDate)} - ${DateFormat('MMM d, y').format(_endDate)}');
-      report.writeln('=' * 100);
-      report.writeln();
-
-      // Fetch and format data for each metric
-      for (final metric in _selectedMetrics) {
-        final snapshot = await _firestore
-            .collection('health_metrics')
-            .where('userId', isEqualTo: userId)
-            .where('type', isEqualTo: metric)
-            .get();
-
-        final data = snapshot.docs
-            .map((doc) => {...doc.data(), 'id': doc.id})
-            .where((data) {
-          DateTime? date;
-          try {
-            final timestamp = data['timestamp'];
-            if (timestamp is Timestamp) {
-              date = timestamp.toDate();
-            } else if (timestamp is int) {
-              date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-            } else {
-              final timestampInt = int.tryParse(timestamp.toString());
-              if (timestampInt != null) {
-                date = DateTime.fromMillisecondsSinceEpoch(timestampInt);
-              }
-            }
-
-            if (date == null || date.isAfter(DateTime.now())) {
-              return false;
-            }
-
-            return date.isAfter(_startDate.subtract(const Duration(days: 1))) &&
-                date.isBefore(_endDate.add(const Duration(days: 1)));
-          } catch (e) {
-            return false;
-          }
-        }).toList()
-          ..sort((a, b) {
-            DateTime? getDate(dynamic timestamp) {
-              try {
-                if (timestamp is Timestamp) {
-                  return timestamp.toDate();
-                } else if (timestamp is int) {
-                  return DateTime.fromMillisecondsSinceEpoch(timestamp);
-                } else {
-                  final timestampInt = int.tryParse(timestamp.toString());
-                  if (timestampInt != null) {
-                    return DateTime.fromMillisecondsSinceEpoch(timestampInt);
-                  }
-                }
-              } catch (e) {
-                return null;
-              }
-              return null;
-            }
-
-            final aDate = getDate(a['timestamp']);
-            final bDate = getDate(b['timestamp']);
-
-            if (aDate == null || bDate == null) return 0;
-            return aDate.compareTo(bDate);
-          });
-
-        if (data.isNotEmpty) {
-          report.writeln(metric.toUpperCase());
-          report.writeln('-' * 100);
-
-          // Write table header with clear column separation
-          if (metric == 'Blood Pressure') {
-            report.writeln(
-                '| ${_padCenter('Date & Time', 22)} | ${_padCenter('Systolic/Diastolic', 18)} | ${_padCenter('Pulse', 10)} | ${_padCenter('Notes', 40)} |');
-            report.writeln('|${'-' * 24}|${'-' * 20}|${'-' * 12}|${'-' * 42}|');
-          } else if (metric == 'Blood Sugar') {
-            report.writeln(
-                '| ${_padCenter('Date & Time', 22)} | ${_padCenter('mg/dL', 10)} | ${_padCenter('mmol/L', 10)} | ${_padCenter('Notes', 48)} |');
-            report.writeln('|${'-' * 24}|${'-' * 12}|${'-' * 12}|${'-' * 50}|');
-          } else {
-            report.writeln(
-                '| ${_padCenter('Date & Time', 22)} | ${_padCenter('Value', 18)} | ${_padCenter('Notes', 50)} |');
-            report.writeln('|${'-' * 24}|${'-' * 20}|${'-' * 52}|');
-          }
-
-          for (final item in data) {
-            final timestamp = item['timestamp'];
-            DateTime? date;
-            try {
-              if (timestamp is Timestamp) {
-                date = timestamp.toDate();
-              } else if (timestamp is int) {
-                date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-              } else {
-                final timestampInt = int.tryParse(timestamp.toString());
-                if (timestampInt != null) {
-                  date = DateTime.fromMillisecondsSinceEpoch(timestampInt);
-                }
-              }
-
-              if (date == null || date.isAfter(DateTime.now())) {
-                continue;
-              }
-            } catch (e) {
-              continue;
-            }
-
-            final dateStr = DateFormat('MMM d, yyyy h:mm a').format(date);
-            String formattedLine = '';
-
-            if (metric == 'Blood Pressure') {
-              final systolicDiastolic =
-                  '${item['systolic']}/${item['diastolic']} mmHg';
-              final pulse = '${item['pulse']} bpm';
-              final notes = item['notes'] ?? '';
-              formattedLine =
-                  '| ${_padRight(dateStr, 22)} | ${_padRight(systolicDiastolic, 18)} | ${_padRight(pulse, 10)} | ${_padRight(notes, 40)} |';
-            } else if (metric == 'Blood Sugar') {
-              final value = item['value'] as num;
-              String mgdL, mmolL;
-
-              // If value > 10, it's likely in mg/dL
-              if (value > 10) {
-                mgdL = value.round().toString();
-                mmolL = (value / 18).toStringAsFixed(1);
-              } else {
-                // Value is in mmol/L
-                mmolL = value.toString();
-                mgdL = (value * 18).round().toString();
-              }
-
-              final notes = item['notes'] ?? '';
-              final mealTime = item['mealTime']?.toString() ?? '';
-              final mealTimeStr =
-                  mealTime.trim().isNotEmpty ? '($mealTime) ' : '';
-              formattedLine =
-                  '| ${_padRight(dateStr, 22)} | ${_padRight(mgdL, 10)} | ${_padRight(mmolL, 10)} | ${_padRight(mealTimeStr + notes, 48)} |';
-            } else if (metric == 'Weight') {
-              final weightText = '${item['weight']} kg';
-              final heightText =
-                  item['height'] != null ? ' (H: ${item['height']} m)' : '';
-              final notes = item['notes'] ?? '';
-              formattedLine =
-                  '| ${_padRight(dateStr, 22)} | ${_padRight(weightText + heightText, 18)} | ${_padRight(notes, 50)} |';
-            } else if (metric == 'Heart Rate') {
-              final valueText = '${item['value']} bpm';
-              final notes = item['notes'] ?? '';
-              formattedLine =
-                  '| ${_padRight(dateStr, 22)} | ${_padRight(valueText, 18)} | ${_padRight(notes, 50)} |';
-            } else {
-              final valueText = '${item['value']} ${item['unit']}';
-              final notes = item['notes'] ?? '';
-              formattedLine =
-                  '| ${_padRight(dateStr, 22)} | ${_padRight(valueText, 18)} | ${_padRight(notes, 50)} |';
-            }
-
-            report.writeln(formattedLine);
-          }
-
-          // Add bottom border to table
-          if (metric == 'Blood Pressure') {
-            report.writeln('|${'-' * 24}|${'-' * 20}|${'-' * 12}|${'-' * 42}|');
-          } else if (metric == 'Blood Sugar') {
-            report.writeln('|${'-' * 24}|${'-' * 12}|${'-' * 12}|${'-' * 50}|');
-          } else {
-            report.writeln('|${'-' * 24}|${'-' * 20}|${'-' * 52}|');
-          }
-          report.writeln();
-        }
-      }
-
-      setState(() {
-        _reportText = report.toString();
-        _isGenerating = false;
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating report: $e'),
-            backgroundColor: Colors.red,
+  pw.Widget _buildBloodSugarTable(List<Map<String, dynamic>> data) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey300,
           ),
-        );
-      }
-      setState(() => _isGenerating = false);
-    }
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('mg/dL'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('mmol/L'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          final dateStr = DateFormat('MMM d, yyyy h:mm a')
+              .format(item['parsedDate'] as DateTime);
+          final value = double.tryParse(item['value']?.toString() ?? '') ?? 0.0;
+
+          double mgdL;
+          double mmolL;
+
+          if (value > 10) {
+            // Input is likely in mg/dL, convert to mmol/L
+            mgdL = value;
+            mmolL = value / 18;
+          } else {
+            // Input is likely in mmol/L, convert to mg/dL
+            mmolL = value;
+            mgdL = value * 18;
+          }
+
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text('${mgdL.toStringAsFixed(0)}'),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(mmolL.toStringAsFixed(1)),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
   }
 
-  // Helper methods for text padding
-  String _padRight(String text, int width) {
-    if (text.length > width) {
-      return text.substring(0, width);
-    }
-    return text.padRight(width);
+  pw.Widget _buildBloodPressureTable(List<Map<String, dynamic>> data) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey300,
+          ),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Systolic'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Diastolic'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          final dateStr = DateFormat('MMM d, yyyy h:mm a')
+              .format(item['parsedDate'] as DateTime);
+          final systolic = item['systolic']?.toString() ?? 'N/A';
+          final diastolic = item['diastolic']?.toString() ?? 'N/A';
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(systolic),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(diastolic),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
   }
 
-  String _padCenter(String text, int width) {
-    if (text.length > width) {
-      return text.substring(0, width);
-    }
-    final padding = width - text.length;
-    final leftPad = padding ~/ 2;
-    final rightPad = padding - leftPad;
-    return ' ' * leftPad + text + ' ' * rightPad;
+  pw.Widget _buildGenericTable(String metric, List<Map<String, dynamic>> data) {
+    print('Building generic table for $metric with ${data.length} records');
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey300,
+          ),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Value'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          print('Processing item for table: $item');
+          final dateStr = DateFormat('MMM d, yyyy h:mm a')
+              .format(item['parsedDate'] as DateTime);
+
+          String valueStr;
+          if (metric == 'Weight') {
+            final weight = item['weight']?.toString() ?? 'N/A';
+            final height = item['height']?.toString();
+            valueStr = height != null
+                ? '$weight kg (Height: $height cm)'
+                : '$weight kg';
+          } else {
+            final value = item['value']?.toString() ?? 'N/A';
+            final unit = item['unit']?.toString() ?? '';
+            valueStr = '$value $unit';
+          }
+
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(valueStr),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
   }
 
   @override
@@ -298,141 +454,157 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Health Report'),
-        actions: [
-          if (_reportText.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.print),
-              onPressed: () {
-                // TODO: Implement printing functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Printing not implemented yet')),
-                );
-              },
-            ),
-          if (_reportText.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: () {
-                Share.share(_reportText, subject: 'Health Report');
-              },
-            ),
-        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Date Range',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    child: InkWell(
-                      onTap: () => _selectDate(context, true),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Start Date',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Date Range',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Card(
+                      child: InkWell(
+                        onTap: () => _selectDate(context, true),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Start Date',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              DateFormat('MMM d, y').format(_startDate),
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                DateFormat('MMM d, y').format(_startDate),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Card(
-                    child: InkWell(
-                      onTap: () => _selectDate(context, false),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'End Date',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Card(
+                      child: InkWell(
+                        onTap: () => _selectDate(context, false),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'End Date',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              DateFormat('MMM d, y').format(_endDate),
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                DateFormat('MMM d, y').format(_endDate),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Select Metrics',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _availableMetrics.map((metric) {
-                final isSelected = _selectedMetrics.contains(metric);
-                return FilterChip(
-                  label: Text(metric),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedMetrics.add(metric);
-                      } else {
-                        _selectedMetrics.remove(metric);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _isGenerating ? null : _generateReport,
-              child: _isGenerating
-                  ? const CircularProgressIndicator()
-                  : const Text('Generate Report'),
-            ),
-            const SizedBox(height: 16),
-            if (_reportText.isNotEmpty) ...[
-              const Divider(),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    _reportText,
-                    style: const TextStyle(fontFamily: 'monospace'),
-                  ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Select Metrics',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableMetrics.map((metric) {
+                  final isSelected = _selectedMetrics.contains(metric);
+                  return FilterChip(
+                    label: Text(metric),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      print(
+                          'Metric ${selected ? "selected" : "deselected"}: $metric'); // Debug log
+                      setState(() {
+                        if (selected) {
+                          _selectedMetrics.add(metric);
+                        } else {
+                          _selectedMetrics.remove(metric);
+                        }
+                      });
+                      print(
+                          'Current selected metrics: $_selectedMetrics'); // Debug log
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _generateReport,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Generate Report'),
               ),
             ],
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PDFScreen extends StatelessWidget {
+  final Uint8List pdfBytes;
+
+  const PDFScreen({super.key, required this.pdfBytes});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Health Report'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: () async {
+              await Printing.layoutPdf(
+                onLayout: (format) async => pdfBytes,
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () async {
+              final file = XFile.fromData(
+                pdfBytes,
+                mimeType: 'application/pdf',
+                name: 'health_report.pdf',
+              );
+              await Share.shareXFiles([file]);
+            },
+          ),
+        ],
+      ),
+      body: pdfx.PdfView(
+        controller: pdfx.PdfController(
+          document: pdfx.PdfDocument.openData(pdfBytes),
         ),
       ),
     );
