@@ -1601,7 +1601,15 @@ class _HealthDataScreenState extends State<HealthDataScreen>
             controller: _tabController,
             isScrollable: true,
             tabs: _healthData.keys.map((metric) {
-              return Tab(text: metric);
+              return Tab(
+                child: Text(
+                  metric,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              );
             }).toList(),
           ),
         ),
@@ -1610,18 +1618,18 @@ class _HealthDataScreenState extends State<HealthDataScreen>
           children: _healthData.entries.map((entry) {
             final metrics = entry.value;
             return metrics.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No data available',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey,
+                        color: Colors.grey[600],
                       ),
                     ),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: metrics.length + 1, // Add 1 for the chart
+                    itemCount: metrics.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         // Show appropriate chart based on metric type
@@ -1694,6 +1702,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
   }
 
   Widget _buildBloodPressureTitle(BloodPressureReading reading) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryColor = isDarkMode ? Colors.white70 : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1701,8 +1713,9 @@ class _HealthDataScreenState extends State<HealthDataScreen>
           children: [
             Text(
               '${reading.systolic}/${reading.diastolic} mmHg',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
+                color: textColor,
               ),
             ),
             const SizedBox(width: 8),
@@ -1726,9 +1739,9 @@ class _HealthDataScreenState extends State<HealthDataScreen>
         ),
         Text(
           'Pulse: ${reading.pulse} bpm',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: Colors.grey,
+            color: secondaryColor,
           ),
         ),
       ],
@@ -1736,7 +1749,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
   }
 
   Widget _buildBloodSugarTitle(BloodSugarReading reading) {
-    // Convert the value to both units
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryColor = isDarkMode ? Colors.white70 : Colors.grey[600];
+
     double mgdLValue = reading.unit == BloodSugarUnit.mgdL
         ? reading.value
         : BloodSugarReading.mmolLToMgdL(reading.value);
@@ -1749,9 +1765,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
       children: [
         Text(
           'Blood Sugar: ${mgdLValue.toStringAsFixed(0)} mg/dL (${mmolLValue.toStringAsFixed(1)} mmol/L)',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
+            color: textColor,
           ),
         ),
         const SizedBox(height: 4),
@@ -1776,9 +1793,9 @@ class _HealthDataScreenState extends State<HealthDataScreen>
             const SizedBox(width: 8),
             Text(
               reading.mealTimeText,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey,
+                color: secondaryColor,
               ),
             ),
           ],
@@ -1788,6 +1805,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
   }
 
   Widget _buildWeightTitle(WeightReading reading) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryColor = isDarkMode ? Colors.white70 : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1795,9 +1816,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
           children: [
             Text(
               'Weight: ${reading.weight.toStringAsFixed(1)} kg',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
+                color: textColor,
               ),
             ),
             const SizedBox(width: 8),
@@ -1816,7 +1838,7 @@ class _HealthDataScreenState extends State<HealthDataScreen>
                   reading.categoryText,
                   style: TextStyle(
                     fontSize: 12,
-                    color: reading.categoryColor ?? Colors.grey,
+                    color: reading.categoryColor ?? secondaryColor,
                   ),
                 ),
               ),
@@ -1825,17 +1847,17 @@ class _HealthDataScreenState extends State<HealthDataScreen>
         if (reading.height != null)
           Text(
             'Height: ${reading.height?.toStringAsFixed(2)} m',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: secondaryColor,
             ),
           ),
         if (reading.height != null)
           Text(
             'BMI: ${reading.bmi?.toStringAsFixed(1)}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: secondaryColor,
             ),
           ),
       ],
@@ -1843,6 +1865,10 @@ class _HealthDataScreenState extends State<HealthDataScreen>
   }
 
   Widget _buildHeartRateTitle(HeartRateReading reading) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryColor = isDarkMode ? Colors.white70 : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1850,8 +1876,9 @@ class _HealthDataScreenState extends State<HealthDataScreen>
           children: [
             Text(
               '${reading.value} bpm',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
+                color: textColor,
               ),
             ),
             const SizedBox(width: 8),
@@ -1875,9 +1902,9 @@ class _HealthDataScreenState extends State<HealthDataScreen>
         ),
         Text(
           'Activity: ${reading.activityText}',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: Colors.grey,
+            color: secondaryColor,
           ),
         ),
       ],

@@ -8,7 +8,8 @@ class HealthcareAppointmentsScreen extends StatefulWidget {
   const HealthcareAppointmentsScreen({super.key});
 
   @override
-  State<HealthcareAppointmentsScreen> createState() => _HealthcareAppointmentsScreenState();
+  State<HealthcareAppointmentsScreen> createState() =>
+      _HealthcareAppointmentsScreenState();
 }
 
 class _HealthcareAppointmentsScreenState
@@ -89,64 +90,136 @@ class _HealthcareAppointmentsScreenState
     final isPast = appointment.appointmentDate.isBefore(now);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isUpcoming
-              ? Colors.blue
-              : isPast
-                  ? Colors.grey
-                  : Colors.green,
-          child: Icon(
-            isUpcoming
-                ? Icons.calendar_today
-                : isPast
-                    ? Icons.calendar_today_outlined
-                    : Icons.check_circle,
-            color: Colors.white,
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: InkWell(
+        onTap: () => _showAppointmentDetails(context, appointment),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isUpcoming
+                          ? Colors.blue.withOpacity(0.1)
+                          : isPast
+                              ? Colors.grey.withOpacity(0.1)
+                              : Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isUpcoming
+                          ? Icons.calendar_today
+                          : isPast
+                              ? Icons.event_busy
+                              : Icons.check_circle,
+                      color: isUpcoming
+                          ? Colors.blue
+                          : isPast
+                              ? Colors.grey
+                              : Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          appointment.title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${appointment.provider} - ${appointment.speciality}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton(
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Edit'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete'),
+                      ),
+                    ],
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          _showAppointmentDialog(context,
+                              appointment: appointment);
+                          break;
+                        case 'delete':
+                          _showDeleteConfirmation(context, appointment);
+                          break;
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    _dateFormat.format(appointment.appointmentDate),
+                    style: TextStyle(
+                      color: isUpcoming ? Colors.blue : Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              if (appointment.location.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        appointment.location,
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (appointment.notes?.isNotEmpty ?? false) ...[
+                const SizedBox(height: 8),
+                Text(
+                  appointment.notes!,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
           ),
         ),
-        title: Text(
-          appointment.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${appointment.provider} - ${appointment.speciality}'),
-            Text(
-              _dateFormat.format(appointment.appointmentDate),
-              style: TextStyle(
-                color: isUpcoming ? Colors.blue : Colors.grey,
-              ),
-            ),
-            if (appointment.location.isNotEmpty)
-              Text('📍 ${appointment.location}'),
-          ],
-        ),
-        trailing: PopupMenuButton(
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Text('Edit'),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Text('Delete'),
-            ),
-          ],
-          onSelected: (value) {
-            switch (value) {
-              case 'edit':
-                _showAppointmentDialog(context, appointment: appointment);
-                break;
-              case 'delete':
-                _showDeleteConfirmation(context, appointment);
-                break;
-            }
-          },
-        ),
-        onTap: () => _showAppointmentDetails(context, appointment),
       ),
     );
   }
@@ -164,7 +237,7 @@ class _HealthcareAppointmentsScreenState
         TextEditingController(text: appointment?.location ?? '');
     final notesController =
         TextEditingController(text: appointment?.notes ?? '');
-    
+
     DateTime selectedDate = appointment?.appointmentDate ?? DateTime.now();
     bool hasReminder = appointment?.hasReminder ?? true;
     int reminderMinutes = appointment?.reminderMinutes ?? 60;
@@ -188,8 +261,8 @@ class _HealthcareAppointmentsScreenState
                 ),
                 TextFormField(
                   controller: providerController,
-                  decoration: const InputDecoration(
-                      labelText: 'Doctor/Institution'),
+                  decoration:
+                      const InputDecoration(labelText: 'Doctor/Institution'),
                   validator: (value) =>
                       value?.isEmpty ?? true ? 'Required' : null,
                 ),
@@ -247,8 +320,7 @@ class _HealthcareAppointmentsScreenState
                           value: 15, child: Text('15 minutes before')),
                       DropdownMenuItem(
                           value: 30, child: Text('30 minutes before')),
-                      DropdownMenuItem(
-                          value: 60, child: Text('1 hour before')),
+                      DropdownMenuItem(value: 60, child: Text('1 hour before')),
                       DropdownMenuItem(
                           value: 120, child: Text('2 hours before')),
                       DropdownMenuItem(
@@ -277,7 +349,9 @@ class _HealthcareAppointmentsScreenState
                 final user = FirebaseAuth.instance.currentUser;
                 if (user == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('You must be logged in to add appointments')),
+                    const SnackBar(
+                        content:
+                            Text('You must be logged in to add appointments')),
                   );
                   return;
                 }
@@ -298,28 +372,26 @@ class _HealthcareAppointmentsScreenState
 
                 try {
                   if (appointment == null) {
-                    print('Adding new appointment: ${newAppointment.toMap()}'); 
+                    print('Adding new appointment: ${newAppointment.toMap()}');
                     await _appointmentService.addAppointment(newAppointment);
-                    print('Successfully added appointment'); 
+                    print('Successfully added appointment');
                   } else {
-                    print('Updating appointment: ${newAppointment.toMap()}'); 
+                    print('Updating appointment: ${newAppointment.toMap()}');
                     await _appointmentService.updateAppointment(newAppointment);
-                    print('Successfully updated appointment'); 
+                    print('Successfully updated appointment');
                   }
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                          appointment == null 
-                              ? 'Appointment added successfully' 
-                              : 'Appointment updated successfully'
-                        ),
+                        content: Text(appointment == null
+                            ? 'Appointment added successfully'
+                            : 'Appointment updated successfully'),
                       ),
                     );
                   }
                 } catch (e) {
-                  print('Error saving appointment: $e'); 
+                  print('Error saving appointment: $e');
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Error: $e')),
@@ -341,7 +413,8 @@ class _HealthcareAppointmentsScreenState
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Appointment'),
-        content: const Text('Are you sure you want to delete this appointment?'),
+        content:
+            const Text('Are you sure you want to delete this appointment?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

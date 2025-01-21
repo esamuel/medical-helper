@@ -3,6 +3,7 @@ import 'health/health_data_screen.dart';
 import 'medications/medications_screen.dart';
 import 'profile/profile_screen.dart';
 import 'emergency_contacts_screen.dart';
+import 'healthcare_appointments_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const HealthDataScreen(),
     const MedicationsScreen(),
+    const HealthcareAppointmentsScreen(),
     const EmergencyContactsScreen(),
     const ProfileScreen(),
   ];
@@ -44,6 +46,10 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Medications',
           ),
           NavigationDestination(
+            icon: Icon(Icons.calendar_today),
+            label: 'Appointments',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.contacts_outlined),
             label: 'Emergency',
           ),
@@ -55,4 +61,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-} 
+}

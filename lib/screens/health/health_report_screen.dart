@@ -34,7 +34,8 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
     'Heart Rate',
     'Weight',
     'Temperature',
-    'Oxygen Level',
+    'Medications',
+    'Appointments',
   ];
 
   @override
@@ -104,68 +105,61 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          build: (context) {
-            final widgets = <pw.Widget>[];
-            print('Building PDF widgets');
+          margin: const pw.EdgeInsets.all(40),
+          build: (context) => [
+            // Header
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  '${_userName!.toUpperCase()}\'S HEALTH REPORT',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  'Date Range: ${DateFormat('MMM d, yyyy').format(_startDate)} - ${DateFormat('MMM d, yyyy').format(_endDate)}',
+                ),
+                pw.SizedBox(height: 20),
+              ],
+            ),
 
-            // Add header
-            widgets.add(
-              pw.Column(
+            // Each metric in sequence
+            ..._selectedMetrics.map((metric) {
+              print('Processing metric for PDF: $metric');
+              final metricData = allMetricData[metric] ?? [];
+              print('Data length for $metric: ${metricData.length}');
+
+              return pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
+                  pw.Divider(height: 2, borderStyle: pw.BorderStyle.dashed),
+                  pw.SizedBox(height: 20),
                   pw.Text(
-                    '${_userName!.toUpperCase()}\'S HEALTH REPORT',
+                    metric.toUpperCase(),
                     style: pw.TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
                   pw.SizedBox(height: 10),
-                  pw.Text(
-                    'Date Range: ${DateFormat('MMM d, yyyy').format(_startDate)} - ${DateFormat('MMM d, yyyy').format(_endDate)}',
-                  ),
-                  pw.SizedBox(height: 20),
+                  if (metricData.isEmpty)
+                    pw.Text('No data available for this metric')
+                  else if (metric == 'Blood Sugar')
+                    _buildBloodSugarTable(metricData)
+                  else if (metric == 'Blood Pressure')
+                    _buildBloodPressureTable(metricData)
+                  else if (metric == 'Medications')
+                    _buildMedicationTable(metricData)
+                  else
+                    _buildGenericTable(metric, metricData),
+                  pw.SizedBox(height: 30),
                 ],
-              ),
-            );
-
-            // Add each metric's data
-            for (final metric in _selectedMetrics) {
-              print('Processing metric for PDF: $metric');
-              final metricData = allMetricData[metric] ?? [];
-              print('Data length for $metric: ${metricData.length}');
-              print(
-                  'Sample data for table: ${metricData.isNotEmpty ? metricData.first : "no data"}');
-
-              widgets.add(
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      metric.toUpperCase(),
-                      style: pw.TextStyle(
-                        fontSize: 16,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 10),
-                    if (metricData.isEmpty)
-                      pw.Text('No data available for this metric')
-                    else if (metric == 'Blood Sugar')
-                      _buildBloodSugarTable(metricData)
-                    else if (metric == 'Blood Pressure')
-                      _buildBloodPressureTable(metricData)
-                    else
-                      _buildGenericTable(metric, metricData),
-                    pw.SizedBox(height: 20),
-                  ],
-                ),
               );
-            }
-
-            print('Finished building PDF widgets');
-            return widgets;
-          },
+            }).toList(),
+          ],
         ),
       );
 
@@ -202,6 +196,87 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
     }
 
     print('Fetching data for metric: $metric, userId: $userId');
+
+    if (metric == 'Medications') {
+      final snapshot = await _firestore
+          .collection('medications')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      print('Raw documents fetched for $metric: ${snapshot.docs.length}');
+
+      final processedData = snapshot.docs.map((doc) {
+        final data = doc.data();
+        print('Processing document for $metric: ${doc.id}');
+        print('Document data: $data');
+        return {...data, 'id': doc.id};
+      }).toList();
+
+      print('Final processed data count for $metric: ${processedData.length}');
+      return processedData;
+    }
+
+    if (metric == 'Appointments') {
+      try {
+        print('Fetching appointments with userId: $userId');
+
+        // Query appointments within the date range
+        final snapshot = await _firestore
+            .collection('healthcare_appointments')
+            .where('userId', isEqualTo: userId)
+            .where('appointmentDate',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
+            .where('appointmentDate',
+                isLessThanOrEqualTo: Timestamp.fromDate(_endDate))
+            .orderBy('appointmentDate', descending: false)
+            .get();
+
+        print('Found ${snapshot.docs.length} appointments in date range');
+
+        if (snapshot.docs.isEmpty) {
+          print('No appointments found in the date range');
+          return [];
+        }
+
+        final processedData = snapshot.docs
+            .map((doc) {
+              final data = doc.data();
+              print('Processing appointment document: ${doc.id}');
+              print('Raw appointment data: $data');
+
+              try {
+                final appointmentDate = data['appointmentDate'] as Timestamp;
+                final appointmentData = {
+                  'id': doc.id,
+                  'dateTime': appointmentDate.toDate(),
+                  'title': data['title'] ?? 'N/A',
+                  'provider': data['provider'] ?? 'N/A',
+                  'location': data['location'] ?? 'N/A',
+                  'notes': data['notes'] ?? '',
+                  'speciality': data['speciality'] ?? 'N/A'
+                };
+                print('Successfully processed appointment: $appointmentData');
+                return appointmentData;
+              } catch (e) {
+                print('Error processing appointment data: $e');
+                return null;
+              }
+            })
+            .where((data) => data != null)
+            .cast<Map<String, dynamic>>()
+            .toList();
+
+        print('Final processed appointments: ${processedData.length}');
+        if (processedData.isNotEmpty) {
+          print('Sample appointment: ${processedData.first}');
+        }
+
+        return processedData;
+      } catch (e) {
+        print('Error fetching appointments: $e');
+        return [];
+      }
+    }
 
     final snapshot = await _firestore
         .collection('health_metrics')
@@ -391,6 +466,165 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
           );
         }).toList(),
       ],
+    );
+  }
+
+  pw.Widget _buildMedicationTable(List<Map<String, dynamic>> data) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Current Medications',
+          style: pw.TextStyle(
+            fontSize: 14,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.SizedBox(height: 10),
+        pw.Table(
+          border: pw.TableBorder.all(),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(2), // Medication name
+            1: const pw.FlexColumnWidth(1.5), // Dosage
+            2: const pw.FlexColumnWidth(1.5), // Frequency
+            3: const pw.FlexColumnWidth(3), // Instructions
+          },
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text('Medication'),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text('Dosage'),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text('Frequency'),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text('Instructions'),
+                ),
+              ],
+            ),
+            ...data.map((item) {
+              return pw.TableRow(
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(item['name']?.toString() ?? 'N/A'),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(item['dosage']?.toString() ?? 'N/A'),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(item['frequency']?.toString() ?? 'N/A'),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(item['instructions']?.toString() ?? 'N/A'),
+                  ),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildAppointmentTable(List<Map<String, dynamic>> data) {
+    if (data.isEmpty) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Healthcare Appointments',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text('No appointments found for the selected period.'),
+        ],
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Healthcare Appointments',
+          style: pw.TextStyle(
+            fontSize: 14,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.SizedBox(height: 10),
+        pw.Table(
+          border: pw.TableBorder.all(),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(1.5), // Date & Time
+            1: const pw.FlexColumnWidth(1.5), // Title
+            2: const pw.FlexColumnWidth(1.5), // Doctor
+            3: const pw.FlexColumnWidth(1.5), // Location
+            4: const pw.FlexColumnWidth(2), // Description
+          },
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              children: [
+                _buildTableHeader('Date & Time'),
+                _buildTableHeader('Title'),
+                _buildTableHeader('Doctor'),
+                _buildTableHeader('Location'),
+                _buildTableHeader('Description'),
+              ],
+            ),
+            ...data.map((item) {
+              final dateTime = item['dateTime'] as DateTime;
+              final dateStr = DateFormat('MMM d, yyyy h:mm a').format(dateTime);
+              return pw.TableRow(
+                children: [
+                  _buildTableCell(dateStr),
+                  _buildTableCell(item['title'] ?? 'N/A'),
+                  _buildTableCell(item['provider'] ?? 'N/A'),
+                  _buildTableCell(item['location'] ?? 'N/A'),
+                  _buildTableCell(item['notes'] ?? ''),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildTableHeader(String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+      ),
+    );
+  }
+
+  pw.Widget _buildTableCell(String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(4),
+      child: pw.Text(text),
     );
   }
 
