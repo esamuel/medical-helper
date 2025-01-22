@@ -135,8 +135,17 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDarkMode
+        ? const Color(0xFF1A1A1A)
+        : Theme.of(context).scaffoldBackgroundColor;
+    final cardColor =
+        isDarkMode ? const Color(0xFF2A2A2A) : Theme.of(context).cardColor;
+    final primaryColor = const Color(0xFF80CBC4);
+    final darkPrimaryColor = const Color(0xFF00695C);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
           widget.medicationToEdit != null
@@ -148,12 +157,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             fontWeight: FontWeight.w400,
           ),
         ),
-        backgroundColor: const Color(0xFF00695C),
+        backgroundColor: darkPrimaryColor,
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF80CBC4)))
+          ? Center(child: CircularProgressIndicator(color: primaryColor))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Form(
@@ -162,20 +170,30 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextFormField(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Medication Name',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: primaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
                         ),
-                        prefixIcon:
-                            Icon(Icons.medication, color: Color(0xFF80CBC4)),
+                        filled: true,
+                        fillColor: cardColor,
+                        prefixIcon: Icon(Icons.medication, color: primaryColor),
                       ),
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
                       initialValue: _name,
                       textCapitalization: TextCapitalization.words,
                       keyboardType: TextInputType.text,
@@ -191,22 +209,36 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Dosage',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: primaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
                         ),
+                        filled: true,
+                        fillColor: cardColor,
                         hintText: 'e.g., 1 pill, 5ml',
-                        hintStyle: TextStyle(color: Colors.white38),
-                        prefixIcon:
-                            Icon(Icons.straighten, color: Color(0xFF80CBC4)),
+                        hintStyle: TextStyle(
+                          color: isDarkMode
+                              ? Colors.white38
+                              : Colors.grey.shade400,
+                        ),
+                        prefixIcon: Icon(Icons.straighten, color: primaryColor),
                       ),
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
                       initialValue: _dosage,
                       keyboardType: TextInputType.text,
                       enableInteractiveSelection: true,
@@ -222,21 +254,31 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                     const SizedBox(height: 16),
                     DropdownButtonFormField<MedicationFrequency>(
                       value: _frequency,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Frequency',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: primaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
                         ),
-                        prefixIcon:
-                            Icon(Icons.schedule, color: Color(0xFF80CBC4)),
+                        filled: true,
+                        fillColor: cardColor,
+                        prefixIcon: Icon(Icons.schedule, color: primaryColor),
                       ),
-                      dropdownColor: const Color(0xFF2A2A2A),
-                      style: const TextStyle(color: Colors.white),
+                      dropdownColor: cardColor,
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
                       items: MedicationFrequency.values.map((frequency) {
                         final name = frequency.toString().split('.').last;
                         final displayName = name
@@ -244,13 +286,16 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                               RegExp(r'([A-Z])'),
                               (match) => ' ${match.group(1)}',
                             )
-                            .toLowerCase();
+                            .toLowerCase()
+                            .trim();
 
                         return DropdownMenuItem(
                           value: frequency,
                           child: Text(
                             displayName,
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
                           ),
                         );
                       }).toList(),
@@ -262,141 +307,138 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Instructions',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: 'Instructions (Optional)',
+                        labelStyle: TextStyle(color: primaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF80CBC4)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
                         ),
+                        filled: true,
+                        fillColor: cardColor,
                         hintText: 'e.g., Take with food',
-                        hintStyle: TextStyle(color: Colors.white38),
+                        hintStyle: TextStyle(
+                          color: isDarkMode
+                              ? Colors.white38
+                              : Colors.grey.shade400,
+                        ),
                         prefixIcon:
-                            Icon(Icons.description, color: Color(0xFF80CBC4)),
+                            Icon(Icons.description, color: primaryColor),
                       ),
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
                       initialValue: _instructions,
                       maxLines: 3,
-                      keyboardType: TextInputType.text,
-                      enableInteractiveSelection: true,
-                      autocorrect: true,
-                      textCapitalization: TextCapitalization.sentences,
+                      keyboardType: TextInputType.multiline,
                       onSaved: (value) => _instructions = value ?? '',
                     ),
                     const SizedBox(height: 16),
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _startDate,
-                          firstDate: DateTime.now()
-                              .subtract(const Duration(days: 365)),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) {
-                          setState(() => _startDate = picked);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Start Date',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          border: OutlineInputBorder(),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.white24),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF80CBC4)),
-                          ),
-                          prefixIcon: Icon(Icons.calendar_today,
-                              color: Color(0xFF80CBC4)),
+                    Card(
+                      color: cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDarkMode
+                              ? Colors.white24
+                              : Colors.grey.shade300,
                         ),
-                        child: Text(
+                      ),
+                      child: ListTile(
+                        leading:
+                            Icon(Icons.calendar_today, color: primaryColor),
+                        title: Text(
+                          'Start Date',
+                          style: TextStyle(
+                            color: isDarkMode ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                        subtitle: Text(
                           '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}',
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
                         ),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _startDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (date != null) {
+                            setState(() => _startDate = date);
+                          }
+                        },
                       ),
                     ),
                     if (_frequency != MedicationFrequency.asNeeded) ...[
-                      const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showTimePicker(
-                            context: context,
-                            initialTime: _defaultTime,
-                          );
-                          if (picked != null) {
-                            setState(() => _defaultTime = picked);
-                          }
-                        },
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'First Taking Time',
-                            labelStyle: TextStyle(color: Colors.white70),
-                            border: OutlineInputBorder(),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.white24),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Color(0xFF80CBC4)),
-                            ),
-                            prefixIcon: Icon(Icons.access_time,
-                                color: Color(0xFF80CBC4)),
-                          ),
-                          child: Text(
-                            '${_defaultTime.hour.toString().padLeft(2, '0')}:${_defaultTime.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Other times will be automatically set based on frequency:',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
-                          fontSize: 14,
+                      Card(
+                        color: cardColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                            color: isDarkMode
+                                ? Colors.white24
+                                : Colors.grey.shade300,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        MedicationModel(
-                          id: '',
-                          name: '',
-                          dosage: '',
-                          frequency: _frequency,
-                          instructions: '',
-                          startDate: DateTime.now(),
-                          userId: '',
-                          defaultTime: _defaultTime,
-                        ).formatTakingTimes(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
+                        child: ListTile(
+                          leading: Icon(Icons.access_time, color: primaryColor),
+                          title: Text(
+                            'Default Time',
+                            style: TextStyle(
+                              color:
+                                  isDarkMode ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _defaultTime.format(context),
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          onTap: () async {
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: _defaultTime,
+                            );
+                            if (time != null) {
+                              setState(() => _defaultTime = time);
+                            }
+                          },
                         ),
                       ),
                     ],
                     const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _saveMedication,
-                      icon: const Icon(Icons.save, color: Colors.white),
+                    ElevatedButton(
+                      onPressed: _saveMedication,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00695C),
-                        padding: const EdgeInsets.all(16.0),
-                        disabledBackgroundColor: Colors.grey,
+                        backgroundColor: darkPrimaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      label: Text(
-                        _isLoading
-                            ? 'Saving...'
-                            : (widget.medicationToEdit != null
-                                ? 'Update Medication'
-                                : 'Save Medication'),
+                      child: Text(
+                        widget.medicationToEdit != null
+                            ? 'Update Medication'
+                            : 'Add Medication',
                         style: const TextStyle(
-                          fontSize: 16,
                           color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
