@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide TableRow;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:typed_data';
 import 'package:printing/printing.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
-import 'package:cross_file/cross_file.dart';
+import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class HealthReportScreen extends StatefulWidget {
   const HealthReportScreen({super.key});
@@ -20,20 +21,19 @@ class HealthReportScreen extends StatefulWidget {
 class _HealthReportScreenState extends State<HealthReportScreen> {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
+  Map<String, List<Map<String, dynamic>>> _healthData = {};
+  bool _isLoading = false;
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
   DateTime _endDate = DateTime.now();
   final Set<String> _selectedMetrics = {};
-  bool _isLoading = false;
-  final String _reportText = 'Generating report, please wait...';
-  Uint8List? _pdfBytes;
   String? _userName;
+  Uint8List? _pdfBytes;
 
   final List<String> _availableMetrics = [
     'Blood Pressure',
     'Blood Sugar',
     'Heart Rate',
     'Weight',
-    'Temperature',
     'Medications',
     'Appointments',
   ];
@@ -46,14 +46,75 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
 
   Future<void> _fetchUserName() async {
     final userId = _auth.currentUser?.uid;
-    if (userId == null) {
-      throw Exception('User not logged in');
-    }
+    if (userId == null) return;
 
     final userDoc = await _firestore.collection('users').doc(userId).get();
     setState(() {
       _userName = userDoc.data()?['fullName'] ?? 'User';
     });
+  }
+
+  DateTime _parseTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return timestamp.toDate();
+    } else if (timestamp is int) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    } else if (timestamp is String) {
+      return DateTime.parse(timestamp);
+    }
+    debugPrint('Warning: Invalid timestamp format: $timestamp');
+    return DateTime.now();
+  }
+
+  Future<void> _loadHealthData() async {
+    setState(() => _isLoading = true);
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      final snapshot = await _firestore
+          .collection('health_metrics')
+          .where('userId', isEqualTo: userId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      final data = <String, List<Map<String, dynamic>>>{
+        'Blood Pressure': [],
+        'Blood Sugar': [],
+        'Heart Rate': [],
+        'Weight': [],
+      };
+
+      for (var doc in snapshot.docs) {
+        try {
+          final metric = doc.data();
+          final type = metric['type'] as String;
+          if (data.containsKey(type)) {
+            final timestamp = _parseTimestamp(metric['timestamp']);
+            // Only include data within the selected date range
+            if (timestamp
+                    .isAfter(_startDate.subtract(const Duration(days: 1))) &&
+                timestamp.isBefore(_endDate.add(const Duration(days: 1)))) {
+              data[type]!.add({
+                ...metric,
+                'id': doc.id,
+                'timestamp': timestamp,
+              });
+            }
+          }
+        } catch (e) {
+          debugPrint('Error processing document ${doc.id}: $e');
+        }
+      }
+
+      setState(() {
+        _healthData = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading health data: $e');
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _generateReport() async {
@@ -64,50 +125,17 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      print('Starting report generation');
-      print('Selected metrics: $_selectedMetrics');
+      await _loadHealthData(); // Load data for selected date range
       final pdf = pw.Document();
 
-      // Fetch all metric data first
-      final allMetricData = <String, List<Map<String, dynamic>>>{};
-      for (final metric in _selectedMetrics) {
-        print('Fetching data for metric: $metric');
-        final data = await _fetchMetricData(metric);
-        print('Fetched ${data.length} records for $metric');
-        print(
-            'Sample data for $metric: ${data.isNotEmpty ? data.first : "no data"}');
-        allMetricData[metric] = data;
-      }
-
-      // Check if we have any data
-      final hasData = allMetricData.values.any((list) => list.isNotEmpty);
-      if (!hasData) {
-        print('No data found for any selected metrics');
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No data found for the selected date range'),
-            ),
-          );
-        }
-        return;
-      }
-
-      print('Building PDF document');
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(40),
           build: (context) => [
-            // Header
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
@@ -123,50 +151,14 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
                   'Date Range: ${DateFormat('MMM d, yyyy').format(_startDate)} - ${DateFormat('MMM d, yyyy').format(_endDate)}',
                 ),
                 pw.SizedBox(height: 20),
+                ..._buildPdfContent(),
               ],
             ),
-
-            // Each metric in sequence
-            ..._selectedMetrics.map((metric) {
-              print('Processing metric for PDF: $metric');
-              final metricData = allMetricData[metric] ?? [];
-              print('Data length for $metric: ${metricData.length}');
-
-              return pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Divider(height: 2, borderStyle: pw.BorderStyle.dashed),
-                  pw.SizedBox(height: 20),
-                  pw.Text(
-                    metric.toUpperCase(),
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 10),
-                  if (metricData.isEmpty)
-                    pw.Text('No data available for this metric')
-                  else if (metric == 'Blood Sugar')
-                    _buildBloodSugarTable(metricData)
-                  else if (metric == 'Blood Pressure')
-                    _buildBloodPressureTable(metricData)
-                  else if (metric == 'Medications')
-                    _buildMedicationTable(metricData)
-                  else
-                    _buildGenericTable(metric, metricData),
-                  pw.SizedBox(height: 30),
-                ],
-              );
-            }).toList(),
           ],
         ),
       );
 
       _pdfBytes = await pdf.save();
-      setState(() {
-        _isLoading = false;
-      });
 
       if (mounted) {
         Navigator.push(
@@ -177,161 +169,497 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
         );
       }
     } catch (e) {
-      print('Error generating PDF: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error generating PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error generating PDF: $e')),
         );
       }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchMetricData(String metric) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) {
-      throw Exception('User not logged in');
+  List<pw.Widget> _buildPdfContent() {
+    final List<pw.Widget> content = [];
+
+    for (final metric in _selectedMetrics) {
+      content.add(pw.Header(
+        level: 0,
+        child: pw.Text(metric),
+      ));
+
+      // Add chart image if available
+      if (_healthData.containsKey(metric) && _healthData[metric]!.isNotEmpty) {
+        content.add(_buildPdfChart(metric));
+      }
+
+      // Add metric data table
+      content.add(_buildMetricTable(metric));
+      content.add(pw.SizedBox(height: 20));
     }
 
-    print('Fetching data for metric: $metric, userId: $userId');
+    return content;
+  }
 
-    if (metric == 'Medications') {
-      final snapshot = await _firestore
-          .collection('medications')
-          .where('userId', isEqualTo: userId)
-          .get();
+  pw.Widget _buildPdfChart(String metric) {
+    // Implementation for PDF chart will be added here
+    return pw.Container(
+      height: 200,
+      child: pw.Center(
+        child: pw.Text('Chart will be added here'),
+      ),
+    );
+  }
 
-      print('Raw documents fetched for $metric: ${snapshot.docs.length}');
-
-      final processedData = snapshot.docs.map((doc) {
-        final data = doc.data();
-        print('Processing document for $metric: ${doc.id}');
-        print('Document data: $data');
-        return {...data, 'id': doc.id};
-      }).toList();
-
-      print('Final processed data count for $metric: ${processedData.length}');
-      return processedData;
+  Widget _buildHealthChart(String type) {
+    final data = _healthData[type] ?? [];
+    if (data.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('No $type data available'),
+        ),
+      );
     }
 
-    if (metric == 'Appointments') {
+    // Extract values based on metric type
+    List<double> values = [];
+    List<DateTime> dates = [];
+
+    for (var item in data) {
       try {
-        print('Fetching appointments with userId: $userId');
+        final timestamp = item['timestamp'] as DateTime;
+        dates.add(timestamp);
 
-        // Query appointments within the date range
-        final snapshot = await _firestore
-            .collection('healthcare_appointments')
-            .where('userId', isEqualTo: userId)
-            .where('appointmentDate',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
-            .where('appointmentDate',
-                isLessThanOrEqualTo: Timestamp.fromDate(_endDate))
-            .orderBy('appointmentDate', descending: false)
-            .get();
-
-        print('Found ${snapshot.docs.length} appointments in date range');
-
-        if (snapshot.docs.isEmpty) {
-          print('No appointments found in the date range');
-          return [];
+        if (type == 'Blood Sugar') {
+          final originalValue = (item['value'] as num).toDouble();
+          // Always convert to mg/dL for the chart
+          final mgdl =
+              _normalizeToMgdl(originalValue, item['unit']?.toString());
+          values.add(mgdl);
+        } else if (type == 'Blood Pressure') {
+          values.add((item['systolic'] as num).toDouble());
+        } else if (type == 'Weight') {
+          values.add((item['weight'] as num).toDouble());
+        } else if (type == 'Heart Rate') {
+          values.add((item['value'] as num).toDouble());
         }
-
-        final processedData = snapshot.docs
-            .map((doc) {
-              final data = doc.data();
-              print('Processing appointment document: ${doc.id}');
-              print('Raw appointment data: $data');
-
-              try {
-                final appointmentDate = data['appointmentDate'] as Timestamp;
-                final appointmentData = {
-                  'id': doc.id,
-                  'dateTime': appointmentDate.toDate(),
-                  'title': data['title'] ?? 'N/A',
-                  'provider': data['provider'] ?? 'N/A',
-                  'location': data['location'] ?? 'N/A',
-                  'notes': data['notes'] ?? '',
-                  'speciality': data['speciality'] ?? 'N/A'
-                };
-                print('Successfully processed appointment: $appointmentData');
-                return appointmentData;
-              } catch (e) {
-                print('Error processing appointment data: $e');
-                return null;
-              }
-            })
-            .where((data) => data != null)
-            .cast<Map<String, dynamic>>()
-            .toList();
-
-        print('Final processed appointments: ${processedData.length}');
-        if (processedData.isNotEmpty) {
-          print('Sample appointment: ${processedData.first}');
-        }
-
-        return processedData;
       } catch (e) {
-        print('Error fetching appointments: $e');
-        return [];
+        debugPrint('Error processing data point: $e');
       }
     }
 
-    final snapshot = await _firestore
-        .collection('health_metrics')
-        .where('userId', isEqualTo: userId)
-        .where('type', isEqualTo: metric)
-        .get();
+    if (values.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('No valid $type data available'),
+        ),
+      );
+    }
 
-    print('Raw documents fetched for $metric: ${snapshot.docs.length}');
+    final color = _getColorForMetric(type);
 
-    final processedData = snapshot.docs
-        .map((doc) {
-          final data = doc.data();
-          print('Processing document for $metric: ${doc.id}');
-          print('Document data: $data');
-
-          try {
-            final timestamp = _parseTimestamp(data['timestamp']);
-            print('Parsed timestamp: $timestamp');
-
-            if (timestamp
-                    .isAfter(_startDate.subtract(const Duration(days: 1))) &&
-                timestamp.isBefore(_endDate.add(const Duration(days: 1)))) {
-              print('Document is within date range');
-              final processedDoc = {
-                ...data,
-                'id': doc.id,
-                'parsedDate': timestamp
-              };
-              print('Processed document: $processedDoc');
-              return processedDoc;
-            } else {
-              print(
-                  'Document outside date range: $timestamp not in ${_startDate} - ${_endDate}');
-            }
-          } catch (e) {
-            print('Error processing document ${doc.id} for $metric: $e');
-          }
-          return null;
-        })
-        .whereType<Map<String, dynamic>>()
-        .toList();
-
-    print('Final processed data count for $metric: ${processedData.length}');
-    return processedData;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              type,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: true,
+                    horizontalInterval: _calculateInterval(values),
+                    verticalInterval: 1,
+                    checkToShowHorizontalLine: (value) =>
+                        value <= values.reduce((a, b) => a > b ? a : b),
+                    checkToShowVerticalLine: (value) =>
+                        value <= values.length - 1,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: Colors.grey.withOpacity(0.3),
+                        strokeWidth: 1,
+                      );
+                    },
+                    getDrawingVerticalLine: (value) {
+                      return FlLine(
+                        color: Colors.grey.withOpacity(0.3),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= 0 &&
+                              value.toInt() < dates.length) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                DateFormat('MM/dd')
+                                    .format(dates[value.toInt()]),
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            );
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      axisNameWidget: type == 'Blood Sugar'
+                          ? const Text('mg/dL', style: TextStyle(fontSize: 10))
+                          : null,
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: _calculateInterval(values),
+                        reservedSize: 42,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border:
+                        Border.all(color: const Color(0xff37434d), width: 1),
+                  ),
+                  minX: 0,
+                  maxX: (values.length - 1).toDouble(),
+                  minY: _calculateMinY(values),
+                  maxY: _calculateMaxY(values),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: List.generate(values.length, (index) {
+                        return FlSpot(index.toDouble(), values[index]);
+                      }),
+                      isCurved: true,
+                      color: color,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: color,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: color.withOpacity(0.2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildStatistics(values, type),
+            const SizedBox(height: 16),
+            _buildDataTable(type, data),
+          ],
+        ),
+      ),
+    );
   }
 
-  DateTime _parseTimestamp(dynamic timestamp) {
-    if (timestamp is Timestamp) {
-      return timestamp.toDate();
-    } else if (timestamp is int) {
-      return DateTime.fromMillisecondsSinceEpoch(timestamp);
-    } else if (timestamp is String) {
-      return DateTime.parse(timestamp);
+  Widget _buildDataTable(String type, List<Map<String, dynamic>> data) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: _getColumnsForType(type),
+        rows: _getRowsForType(type, data),
+      ),
+    );
+  }
+
+  List<DataColumn> _getColumnsForType(String type) {
+    switch (type) {
+      case 'Blood Pressure':
+        return [
+          const DataColumn(label: Text('Date')),
+          const DataColumn(label: Text('Time')),
+          const DataColumn(label: Text('Systolic')),
+          const DataColumn(label: Text('Diastolic')),
+          const DataColumn(label: Text('Pulse')),
+        ];
+      case 'Blood Sugar':
+        return [
+          const DataColumn(label: Text('Date')),
+          const DataColumn(label: Text('Time')),
+          const DataColumn(label: Text('mg/dL')),
+          const DataColumn(label: Text('mmol/L')),
+          const DataColumn(label: Text('Meal Time')),
+        ];
+      case 'Weight':
+        return [
+          const DataColumn(label: Text('Date')),
+          const DataColumn(label: Text('Time')),
+          const DataColumn(label: Text('Weight (kg)')),
+        ];
+      case 'Heart Rate':
+        return [
+          const DataColumn(label: Text('Date')),
+          const DataColumn(label: Text('Time')),
+          const DataColumn(label: Text('BPM')),
+        ];
+      default:
+        return [
+          const DataColumn(label: Text('Date')),
+          const DataColumn(label: Text('Time')),
+          const DataColumn(label: Text('Value')),
+        ];
     }
-    throw FormatException('Unable to parse timestamp: $timestamp');
+  }
+
+  List<DataRow> _getRowsForType(String type, List<Map<String, dynamic>> data) {
+    return data.map((item) {
+      final date = DateFormat('MMM d, yyyy').format(item['timestamp']);
+      final time = DateFormat('h:mm a').format(item['timestamp']);
+
+      switch (type) {
+        case 'Blood Pressure':
+          return DataRow(cells: [
+            DataCell(Text(date)),
+            DataCell(Text(time)),
+            DataCell(Text(item['systolic'].toString())),
+            DataCell(Text(item['diastolic'].toString())),
+            DataCell(Text(item['pulse'].toString())),
+          ]);
+        case 'Blood Sugar':
+          final originalValue = (item['value'] as num).toDouble();
+          final mgdl =
+              _normalizeToMgdl(originalValue, item['unit']?.toString());
+          final mmol =
+              _normalizeToMmol(originalValue, item['unit']?.toString());
+
+          return DataRow(cells: [
+            DataCell(Text(date)),
+            DataCell(Text(time)),
+            DataCell(Text('${mgdl.toStringAsFixed(0)} mg/dL')),
+            DataCell(Text('${mmol.toStringAsFixed(1)} mmol/L')),
+            DataCell(Text(item['mealTime'].toString())),
+          ]);
+        case 'Weight':
+          return DataRow(cells: [
+            DataCell(Text(date)),
+            DataCell(Text(time)),
+            DataCell(Text('${item['weight']} kg')),
+          ]);
+        case 'Heart Rate':
+          return DataRow(cells: [
+            DataCell(Text(date)),
+            DataCell(Text(time)),
+            DataCell(Text('${item['value']} bpm')),
+          ]);
+        default:
+          return DataRow(cells: [
+            DataCell(Text(date)),
+            DataCell(Text(time)),
+            DataCell(Text(item['value'].toString())),
+          ]);
+      }
+    }).toList();
+  }
+
+  pw.Widget _buildMetricTable(String metric) {
+    final data = _healthData[metric] ?? [];
+    if (data.isEmpty) {
+      return pw.Text('No data available for this period');
+    }
+
+    switch (metric) {
+      case 'Blood Pressure':
+        return _buildBloodPressureTable(data);
+      case 'Blood Sugar':
+        return _buildBloodSugarTable(data);
+      case 'Weight':
+        return _buildGenericTable(metric, data);
+      case 'Heart Rate':
+        return _buildGenericTable(metric, data);
+      default:
+        return pw.Container();
+    }
+  }
+
+  pw.Widget _buildBloodPressureTable(List<Map<String, dynamic>> data) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Systolic'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Diastolic'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Pulse'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          final dateStr =
+              DateFormat('MMM d, y h:mm a').format(item['timestamp']);
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(item['systolic'].toString()),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(item['diastolic'].toString()),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(item['pulse'].toString()),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  pw.Widget _buildBloodSugarTable(List<Map<String, dynamic>> data) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('mg/dL'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('mmol/L'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Meal Time'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          final dateStr =
+              DateFormat('MMM d, y h:mm a').format(item['timestamp']);
+          final originalValue = (item['value'] as num).toDouble();
+          final mgdl =
+              _normalizeToMgdl(originalValue, item['unit']?.toString());
+          final mmol =
+              _normalizeToMmol(originalValue, item['unit']?.toString());
+
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text('${mgdl.toStringAsFixed(0)} mg/dL'),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text('${mmol.toStringAsFixed(1)} mmol/L'),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(item['mealTime'].toString()),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  pw.Widget _buildGenericTable(String metric, List<Map<String, dynamic>> data) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Date & Time'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text('Value'),
+            ),
+          ],
+        ),
+        ...data.map((item) {
+          final dateStr =
+              DateFormat('MMM d, y h:mm a').format(item['timestamp']);
+          final value = metric == 'Weight' ? item['weight'] : item['value'];
+          final unit = metric == 'Weight' ? 'kg' : 'bpm';
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(dateStr),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text('$value $unit'),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
   }
 
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
@@ -355,332 +683,8 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
           }
         }
       });
+      _loadHealthData();
     }
-  }
-
-  pw.Widget _buildBloodSugarTable(List<Map<String, dynamic>> data) {
-    return pw.Table(
-      border: pw.TableBorder.all(),
-      children: [
-        pw.TableRow(
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey300,
-          ),
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Date & Time'),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('mg/dL'),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('mmol/L'),
-            ),
-          ],
-        ),
-        ...data.map((item) {
-          final dateStr = DateFormat('MMM d, yyyy h:mm a')
-              .format(item['parsedDate'] as DateTime);
-          final value = double.tryParse(item['value']?.toString() ?? '') ?? 0.0;
-
-          double mgdL;
-          double mmolL;
-
-          if (value > 10) {
-            // Input is likely in mg/dL, convert to mmol/L
-            mgdL = value;
-            mmolL = value / 18;
-          } else {
-            // Input is likely in mmol/L, convert to mg/dL
-            mmolL = value;
-            mgdL = value * 18;
-          }
-
-          return pw.TableRow(
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(dateStr),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text('${mgdL.toStringAsFixed(0)}'),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(mmolL.toStringAsFixed(1)),
-              ),
-            ],
-          );
-        }).toList(),
-      ],
-    );
-  }
-
-  pw.Widget _buildBloodPressureTable(List<Map<String, dynamic>> data) {
-    return pw.Table(
-      border: pw.TableBorder.all(),
-      children: [
-        pw.TableRow(
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey300,
-          ),
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Date & Time'),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Systolic'),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Diastolic'),
-            ),
-          ],
-        ),
-        ...data.map((item) {
-          final dateStr = DateFormat('MMM d, yyyy h:mm a')
-              .format(item['parsedDate'] as DateTime);
-          final systolic = item['systolic']?.toString() ?? 'N/A';
-          final diastolic = item['diastolic']?.toString() ?? 'N/A';
-          return pw.TableRow(
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(dateStr),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(systolic),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(diastolic),
-              ),
-            ],
-          );
-        }).toList(),
-      ],
-    );
-  }
-
-  pw.Widget _buildMedicationTable(List<Map<String, dynamic>> data) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'Current Medications',
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 10),
-        pw.Table(
-          border: pw.TableBorder.all(),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2), // Medication name
-            1: const pw.FlexColumnWidth(1.5), // Dosage
-            2: const pw.FlexColumnWidth(1.5), // Frequency
-            3: const pw.FlexColumnWidth(3), // Instructions
-          },
-          children: [
-            pw.TableRow(
-              decoration: pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
-              children: [
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(4),
-                  child: pw.Text('Medication'),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(4),
-                  child: pw.Text('Dosage'),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(4),
-                  child: pw.Text('Frequency'),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(4),
-                  child: pw.Text('Instructions'),
-                ),
-              ],
-            ),
-            ...data.map((item) {
-              return pw.TableRow(
-                children: [
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text(item['name']?.toString() ?? 'N/A'),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text(item['dosage']?.toString() ?? 'N/A'),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text(item['frequency']?.toString() ?? 'N/A'),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text(item['instructions']?.toString() ?? 'N/A'),
-                  ),
-                ],
-              );
-            }).toList(),
-          ],
-        ),
-      ],
-    );
-  }
-
-  pw.Widget _buildAppointmentTable(List<Map<String, dynamic>> data) {
-    if (data.isEmpty) {
-      return pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'Healthcare Appointments',
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Text('No appointments found for the selected period.'),
-        ],
-      );
-    }
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'Healthcare Appointments',
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 10),
-        pw.Table(
-          border: pw.TableBorder.all(),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(1.5), // Date & Time
-            1: const pw.FlexColumnWidth(1.5), // Title
-            2: const pw.FlexColumnWidth(1.5), // Doctor
-            3: const pw.FlexColumnWidth(1.5), // Location
-            4: const pw.FlexColumnWidth(2), // Description
-          },
-          children: [
-            pw.TableRow(
-              decoration: pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
-              children: [
-                _buildTableHeader('Date & Time'),
-                _buildTableHeader('Title'),
-                _buildTableHeader('Doctor'),
-                _buildTableHeader('Location'),
-                _buildTableHeader('Description'),
-              ],
-            ),
-            ...data.map((item) {
-              final dateTime = item['dateTime'] as DateTime;
-              final dateStr = DateFormat('MMM d, yyyy h:mm a').format(dateTime);
-              return pw.TableRow(
-                children: [
-                  _buildTableCell(dateStr),
-                  _buildTableCell(item['title'] ?? 'N/A'),
-                  _buildTableCell(item['provider'] ?? 'N/A'),
-                  _buildTableCell(item['location'] ?? 'N/A'),
-                  _buildTableCell(item['notes'] ?? ''),
-                ],
-              );
-            }).toList(),
-          ],
-        ),
-      ],
-    );
-  }
-
-  pw.Widget _buildTableHeader(String text) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(4),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-      ),
-    );
-  }
-
-  pw.Widget _buildTableCell(String text) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(4),
-      child: pw.Text(text),
-    );
-  }
-
-  pw.Widget _buildGenericTable(String metric, List<Map<String, dynamic>> data) {
-    print('Building generic table for $metric with ${data.length} records');
-    return pw.Table(
-      border: pw.TableBorder.all(),
-      children: [
-        pw.TableRow(
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey300,
-          ),
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Date & Time'),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text('Value'),
-            ),
-          ],
-        ),
-        ...data.map((item) {
-          print('Processing item for table: $item');
-          final dateStr = DateFormat('MMM d, yyyy h:mm a')
-              .format(item['parsedDate'] as DateTime);
-
-          String valueStr;
-          if (metric == 'Weight') {
-            final weight = item['weight']?.toString() ?? 'N/A';
-            final height = item['height']?.toString();
-            valueStr = height != null
-                ? '$weight kg (Height: $height cm)'
-                : '$weight kg';
-          } else {
-            final value = item['value']?.toString() ?? 'N/A';
-            final unit = item['unit']?.toString() ?? '';
-            valueStr = '$value $unit';
-          }
-
-          return pw.TableRow(
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(dateStr),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
-                child: pw.Text(valueStr),
-              ),
-            ],
-          );
-        }).toList(),
-      ],
-    );
   }
 
   @override
@@ -691,7 +695,7 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -707,7 +711,7 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
                       child: InkWell(
                         onTap: () => _selectDate(context, true),
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -735,7 +739,7 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
                       child: InkWell(
                         onTap: () => _selectDate(context, false),
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -774,8 +778,6 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
                     label: Text(metric),
                     selected: isSelected,
                     onSelected: (selected) {
-                      print(
-                          'Metric ${selected ? "selected" : "deselected"}: $metric'); // Debug log
                       setState(() {
                         if (selected) {
                           _selectedMetrics.add(metric);
@@ -783,24 +785,160 @@ class _HealthReportScreenState extends State<HealthReportScreen> {
                           _selectedMetrics.remove(metric);
                         }
                       });
-                      print(
-                          'Current selected metrics: $_selectedMetrics'); // Debug log
+                      _loadHealthData();
                     },
                   );
                 }).toList(),
               ),
               const SizedBox(height: 24),
+              if (_selectedMetrics.isNotEmpty) ...[
+                for (final metric in _selectedMetrics)
+                  if (_healthData.containsKey(metric)) ...[
+                    _buildHealthChart(metric),
+                    const SizedBox(height: 24),
+                  ],
+              ],
               ElevatedButton(
                 onPressed: _isLoading ? null : _generateReport,
                 child: _isLoading
                     ? const CircularProgressIndicator()
-                    : const Text('Generate Report'),
+                    : const Text('Generate PDF Report'),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color _getColorForMetric(String metric) {
+    switch (metric) {
+      case 'Blood Pressure':
+        return Colors.red;
+      case 'Blood Sugar':
+        return Colors.orange;
+      case 'Heart Rate':
+        return Colors.blue;
+      case 'Weight':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildStatistics(List<double> values, String type) {
+    if (values.isEmpty) return const SizedBox.shrink();
+
+    final average = values.reduce((a, b) => a + b) / values.length;
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final max = values.reduce((a, b) => a > b ? a : b);
+
+    if (type == 'Blood Sugar') {
+      // Values are already normalized to mg/dL in the chart data
+      final mgdlAvg = average;
+      final mgdlMin = min;
+      final mgdlMax = max;
+
+      final mmolAvg = _normalizeToMmol(average, null);
+      final mmolMin = _normalizeToMmol(min, null);
+      final mmolMax = _normalizeToMmol(max, null);
+
+      return Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatCard('Average', mgdlAvg, 'mg/dL'),
+              _buildStatCard('Min', mgdlMin, 'mg/dL'),
+              _buildStatCard('Max', mgdlMax, 'mg/dL'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatCard('Average', mmolAvg, 'mmol/L'),
+              _buildStatCard('Min', mmolMin, 'mmol/L'),
+              _buildStatCard('Max', mmolMax, 'mmol/L'),
+            ],
+          ),
+        ],
+      );
+    }
+
+    String unit = '';
+    switch (type) {
+      case 'Blood Pressure':
+        unit = 'mmHg';
+        break;
+      case 'Weight':
+        unit = 'kg';
+        break;
+      case 'Heart Rate':
+        unit = 'bpm';
+        break;
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _buildStatCard('Average', average, unit),
+        _buildStatCard('Min', min, unit),
+        _buildStatCard('Max', max, unit),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String label, double value, String unit) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        Text(
+          '${value.toStringAsFixed(1)} $unit',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+      ],
+    );
+  }
+
+  double _calculateInterval(List<double> values) {
+    if (values.isEmpty) return 1;
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final max = values.reduce((a, b) => a > b ? a : b);
+    return (max - min) / 5;
+  }
+
+  double _calculateMinY(List<double> values) {
+    if (values.isEmpty) return 0;
+    final min = values.reduce((a, b) => a < b ? a : b);
+    return min * 0.9;
+  }
+
+  double _calculateMaxY(List<double> values) {
+    if (values.isEmpty) return 100;
+    final max = values.reduce((a, b) => a > b ? a : b);
+    return max * 1.1;
+  }
+
+  double _normalizeToMmol(double value, String? unit) {
+    if (!_isValueInMmol(value)) {
+      return value / 18.018; // Convert from mg/dL to mmol/L
+    }
+    return value; // Already in mmol/L
+  }
+
+  double _normalizeToMgdl(double value, String? unit) {
+    if (_isValueInMmol(value)) {
+      return value * 18.018; // Convert from mmol/L to mg/dL
+    }
+    return value; // Already in mg/dL
+  }
+
+  bool _isValueInMmol(double value) {
+    return value < 80 || (value <= 12 && value >= 3); // Typical mmol/L ranges
   }
 }
 
