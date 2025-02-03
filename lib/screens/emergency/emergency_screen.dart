@@ -11,29 +11,28 @@ class EmergencyScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1A1A1A),
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Text(
             'Please log in to view emergency contacts',
-            style: TextStyle(color: Colors.white),
+            style: Theme.of(context).textTheme.bodyLarge,
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Emergency',
           style: TextStyle(
-            color: Colors.white,
             fontSize: 24,
             fontWeight: FontWeight.w400,
           ),
         ),
-        backgroundColor: const Color(0xFF00695C),
+        backgroundColor: Theme.of(context).primaryColor,
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -48,28 +47,21 @@ class EmergencyScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline,
                     size: 48,
-                    color: Colors.red,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Error loading contacts',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     snapshot.error.toString(),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 14,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -77,15 +69,56 @@ class EmergencyScreen extends StatelessWidget {
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
+            return Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF80CBC4),
+                color: Theme.of(context).primaryColor,
               ),
             );
           }
 
           final docs = snapshot.data?.docs ?? [];
           debugPrint('Number of contacts loaded: ${docs.length}');
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.emergency_outlined,
+                    size: 64,
+                    color: Theme.of(context).primaryColor.withOpacity(0.6),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Emergency Information',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Add important emergency information and contacts that can be quickly accessed when needed',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => _addContact(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                    ),
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text(
+                      'Add Emergency Contact',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
           // Sort contacts in memory
           final contacts = docs.map((doc) {
@@ -101,193 +134,150 @@ class EmergencyScreen extends StatelessWidget {
               return a.value.name.compareTo(b.value.name);
             });
 
-          if (contacts.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.emergency_outlined,
-                    size: 64,
-                    color: const Color(0xFF80CBC4).withOpacity(0.6),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Emergency Information',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Add important emergency information and contacts that can be quickly accessed when needed',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => _addContact(context),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF00695C),
-                    ),
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    label: const Text(
-                      'Add Emergency Contact',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: contacts.length,
             itemBuilder: (context, index) {
               final contact = contacts[index].value;
               final contactId = contacts[index].key;
-              return _buildContactCard(contact, contactId);
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                color: Theme.of(context).cardColor,
+                child: ExpansionTile(
+                  leading: Stack(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.secondary
+                                : Theme.of(context).primaryColor,
+                        child: Text(
+                          contact.name.isNotEmpty
+                              ? contact.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                      if (contact.isPrimaryContact)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : Theme.of(context).primaryColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color:
+                                    Theme.of(context).scaffoldBackgroundColor,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.star,
+                              size: 12,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  iconColor: Theme.of(context).primaryColor,
+                  collapsedIconColor: Theme.of(context).primaryColor,
+                  title: Text(
+                    contact.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: Text(
+                    contact.relationship,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildInfoRow(context, Icons.phone, 'Primary Phone',
+                              contact.phoneNumber),
+                          if (contact.alternativePhone.isNotEmpty)
+                            _buildInfoRow(context, Icons.phone_forwarded,
+                                'Alternative Phone', contact.alternativePhone),
+                          if (contact.email.isNotEmpty)
+                            _buildInfoRow(
+                                context, Icons.email, 'Email', contact.email),
+                          if (contact.address.isNotEmpty)
+                            _buildInfoRow(context, Icons.location_on, 'Address',
+                                contact.address),
+                          if (contact.notes.isNotEmpty)
+                            _buildInfoRow(
+                                context, Icons.note, 'Notes', contact.notes),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  Icons.phone,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                onPressed: () => _makePhoneCall(
+                                    context, contact.phoneNumber),
+                              ),
+                              if (contact.alternativePhone.isNotEmpty)
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.phone_forwarded,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                  onPressed: () => _makePhoneCall(
+                                      context, contact.alternativePhone),
+                                ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () =>
+                                    _editContact(context, contact, contactId),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                onPressed: () =>
+                                    _deleteContact(context, contactId),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addContact(context),
-        backgroundColor: const Color(0xFF00695C),
+        backgroundColor: Theme.of(context).primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildContactCard(EmergencyContact contact, String contactId) {
-    return Builder(
-      builder: (BuildContext context) => Card(
-        margin: const EdgeInsets.only(bottom: 16),
-        color: const Color(0xFF2A2A2A),
-        child: ExpansionTile(
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                backgroundColor: const Color(0xFF80CBC4),
-                child: Text(
-                  contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: Color(0xFF1A1A1A),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              if (contact.isPrimaryContact)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF00695C),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.star,
-                      size: 12,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          iconColor: const Color(0xFF80CBC4),
-          collapsedIconColor: const Color(0xFF80CBC4),
-          title: Text(
-            contact.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            contact.relationship,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.87),
-              fontSize: 16,
-            ),
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildInfoRow(
-                      Icons.phone, 'Primary Phone', contact.phoneNumber),
-                  if (contact.alternativePhone.isNotEmpty)
-                    _buildInfoRow(Icons.phone_forwarded, 'Alternative Phone',
-                        contact.alternativePhone),
-                  if (contact.email.isNotEmpty)
-                    _buildInfoRow(Icons.email, 'Email', contact.email),
-                  if (contact.address.isNotEmpty)
-                    _buildInfoRow(
-                        Icons.location_on, 'Address', contact.address),
-                  if (contact.notes.isNotEmpty)
-                    _buildInfoRow(Icons.note, 'Notes', contact.notes),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.phone,
-                          color: Color(0xFF80CBC4),
-                        ),
-                        onPressed: () =>
-                            _makePhoneCall(context, contact.phoneNumber),
-                      ),
-                      if (contact.alternativePhone.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.phone_forwarded,
-                            color: Color(0xFF80CBC4),
-                          ),
-                          onPressed: () =>
-                              _makePhoneCall(context, contact.alternativePhone),
-                        ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.edit,
-                          color: Colors.blue,
-                        ),
-                        onPressed: () =>
-                            _editContact(context, contact, contactId),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.red,
-                        ),
-                        onPressed: () => _deleteContact(context, contactId),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(
+      BuildContext context, IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -296,7 +286,7 @@ class EmergencyScreen extends StatelessWidget {
           Icon(
             icon,
             size: 20,
-            color: const Color(0xFF80CBC4),
+            color: Theme.of(context).primaryColor,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -305,17 +295,11 @@ class EmergencyScreen extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 12,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
             ),
